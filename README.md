@@ -18,30 +18,3 @@ This project was part of my internship in the **Electronic Systems group at Eind
 * */scratch*: Simulation scenarios and test scripts.
 * */results*: Output data, PCAP captures, and analysis plots.
 * */docs*: Technical notes, references to the 802.1Qcr standard, and the final internship report.
-
-## Getting Started
-
-### 1. Installation
-Clone this repository into the `contrib` directory of your NS-3 installation:
-```bash
-cd ns-3-dev/contrib
-git clone https://github.com/your-username/ns3-tsn-ats.git 
-```
-
-### 2. Configure and Build NS-3
-
-From the `ns-3-dev` root directory, run the following commands to configure the project with debug symbols and build the modules:
-```bash
-# Configure the project
-./ns3 configure --build-profile=debug --enable-examples --enable-tests
-
-# Build the project (this will include our tsn-ats module)
-./ns3 build
-```
-
-### 3. Run a Sample Simulation
-
-To verify the implementation, you can run the provided test scenario located in the `scratch` folder:
-```bash
-./ns3 run scratch/ats-test-scenario
-```
