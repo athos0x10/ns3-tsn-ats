@@ -85,3 +85,43 @@ The `csma-bridge` example tests the interaction between nodes and a switch. To t
 # High-level log for Bridge and CSMA interaction
 NS_LOG="BridgeNetDevice:CsmaNetDevice" ./ns3 run csma-bridge
 ```
+## Two simulation in ns-3
+
+```mermaid
+graph TD
+    subgraph "Système de Vol Redondant (Basé sur Zhao et al.)"
+        S1[Capteur Vitesse] --- SW1((Switch TSN A))
+        S1 --- SW2((Switch TSN B))
+        
+        S2[Capteur Altitude] --- SW1
+        S2 --- SW2
+        
+        SW1 === FCC[Calculateur de Vol FCC]
+        SW2 === FCC
+    end
+
+    style SW1 fill:#f96,stroke:#333
+    style SW2 fill:#f96,stroke:#333
+    style FCC fill:#69f,stroke:#333,stroke-width:4px
+```
+
+```mermaid
+graph LR
+    subgraph "Zone Avant (Sensor Aggregation)"
+        Cam[Caméra ADAS] --- ZG1((Zonal Gateway 1))
+        Radar[Radar Frontal] --- ZG1
+    end
+
+    subgraph "Backbone Ethernet TSN"
+        ZG1 === ZG2((Zonal Gateway 2))
+    end
+
+    subgraph "Zone Centrale / Arrière"
+        ZG2 --- ADCU[Calculateur Autonome ADCU]
+        ZG2 --- Logs[Maintenance Data]
+    end
+
+    style ZG1 fill:#8c8,stroke:#333
+    style ZG2 fill:#8c8,stroke:#333
+    style ADCU fill:#f66,stroke:#333,stroke-width:4px
+```
