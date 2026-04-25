@@ -65,4 +65,3 @@ To verify the installation:
 ```bash
 ./test.py
 ```
-```
