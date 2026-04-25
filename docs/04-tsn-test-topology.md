@@ -35,39 +35,58 @@ graph TD
     style FCC fill:#69f,stroke:#333,stroke-width:4px
 ```
 
+Voici une deuxième topologie basée directement sur la **Figure 2** de l'article scientifique que vous avez fourni. 
+
+Cette topologie est particulièrement intéressante pour l'évaluation car elle introduit des scénarios de **multi-sauts (multi-hop)** et de **confluence de flux**, ce qui permet de tester l'accumulation de la gigue et le calcul des pires délais (Worst-Case Latency).
+
+---
+
+## Topology 2: Multi-Hop Mixed-Traffic Network
+**Source:** [Zhao, L., Pop, P., & Craciunas, S. S. (2018). "Worst-Case Latency Analysis for IEEE 802.1Qbv Time Sensitive Networks Using Network Calculus". *IEEE Access*, vol. [cite_start]6, pp. 41803-41819.](https://ieeexplore.ieee.org/document/8418352) [cite: 2]
+
 ```mermaid
-graph LR
-    subgraph "Calcul Central (Brain)"
-        CC[Central Compute Unit]
+graph TD
+    subgraph "Sources"
+        ES1[End System 1 - Talker dr1]
+        ES2[End System 2 - Talker dr2]
     end
 
-    subgraph "Zone Avant (High Speed Backbone)"
-        SW_C((Switch Central TSN))
+    subgraph "TSN Backbone (Switches)"
+        SW1((Switch 1))
+        SW2((Switch 2))
+        SW3((Switch 3))
     end
 
-    subgraph "Zone Gateway - Avant Gauche"
-        GW_FL[Zonal Gateway FL]
-        Cam[Caméra ADAS - Flux Constant]
-        Ctrl[Capteur Direction - Flux Critique]
+    subgraph "Destinations"
+        ES3[End System 3 - Listener dr1 & dr2]
+        ES4[End System 4 - Listener dr1]
     end
 
-    subgraph "Zone Gateway - Avant Droit"
-        GW_FR[Zonal Gateway FR]
-        Radio[Infotainment - Best Effort]
-        Lidar[Lidar - Rafales de données]
-    end
-
-    %% Connexions
-    Cam --- GW_FL
-    Ctrl --- GW_FL
-    Radio --- GW_FR
-    Lidar --- GW_FR
+    %% Physical Links
+    ES1 --- SW1
+    ES2 --- SW1
     
-    GW_FL === SW_C
-    GW_FR === SW_C
-    SW_C === CC
+    SW1 === SW2
+    SW1 --- SW3
+    SW2 --- SW3
 
-    style SW_C fill:#f96,stroke:#333
-    style CC fill:#69f,stroke:#333,stroke-width:4px
-    style Ctrl fill:#f66,stroke:#333
-``` 
+    SW2 --- ES3
+    SW2 --- ES4
+
+    %% Logical Flow Indications
+    linkStyle 2 stroke:#f66,stroke-width:4px,label:Shared_Path
+    
+    style SW1 fill:#f96,stroke:#333
+    style SW2 fill:#f96,stroke:#333
+    style SW3 fill:#f96,stroke:#333
+    style ES1 fill:#d4e1f5,stroke:#333
+    style ES2 fill:#d4e1f5,stroke:#333
+```
+
+---
+
+### Pourquoi cette topologie complète la première :
+1.  **Topologie 1 (Aérospatiale) :** Teste la robustesse via la **redondance** (plusieurs chemins physiques).
+2.  **Topologie 2 (Zhao et al.) :** Teste la performance temporelle via le **multi-sauts** (un seul chemin critique partagé par plusieurs flux).
+
+[cite_start]L'utilisation de cette source (Zhao et al., 2018) est très solide car elle provient d'une étude publiée dans **IEEE Access** qui fait référence pour l'analyse des délais par le calcul réseau (Network Calculus)[cite: 2, 97].
