@@ -5,7 +5,7 @@
  * * @note Refactoring: NetDevice naming convention updated to
  * dev_Source_Destination to improve readability and mapping with the physical
  * topology.
- * * @version 0.2
+ * * @version 0.3
  * @date 2026-04-25
  */
 //  ==========================================================================
@@ -182,8 +182,18 @@ int main(int argc, char *argv[]) {
 
   // Queues Setup
   // Note: Standard Ethernet FIFO for now.
-  dev_AS0_SW1->SetQueue(CreateObject<DropTailQueue<Packet>>());
-  dev_SW1_FCC->SetQueue(CreateObject<DropTailQueue<Packet>>());
+  Ptr<DropTailQueue<Packet>> queue;
+  std::vector<Ptr<EthernetNetDevice>> allDevices = {
+      dev_AS0_SW1, dev_AS0_SW2, dev_AS1_SW1, dev_AS1_SW2,
+      dev_FCC_SW1, dev_FCC_SW2, dev_SW1_AS0, dev_SW1_AS1,
+      dev_SW1_FCC, dev_SW2_AS0, dev_SW2_AS1, dev_SW2_FCC};
+  // We use two queues one for each priority
+  for (int i = 0; i < 2; i++) {
+    for (auto d : allDevices) {
+      queue = CreateObject<DropTailQueue<Packet>>();
+      d->SetQueue(queue);
+    }
+  }
 
   // Forwarding Tables
   // Routing traffic to FCC MAC address
@@ -205,7 +215,7 @@ int main(int argc, char *argv[]) {
   app0->SetAttribute("VlanID", UintegerValue(1));
   app0->SetAttribute("PCP", UintegerValue(1));
   app0->SetAttribute("DEI", UintegerValue(0));
-  n0->AddApplication(app0);
+  nAS0->AddApplication(app0);
   app0->SetStartTime(Seconds(0));
   app0->SetStopTime(Seconds(10));
 
