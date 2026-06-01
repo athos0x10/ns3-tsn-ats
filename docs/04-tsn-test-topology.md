@@ -35,14 +35,10 @@ graph TD
     style FCC fill:#69f,stroke:#333,stroke-width:4px
 ```
 
-Voici une deuxième topologie basée directement sur la **Figure 2** de l'article scientifique que vous avez fourni. 
-
-Cette topologie est particulièrement intéressante pour l'évaluation car elle introduit des scénarios de **multi-sauts (multi-hop)** et de **confluence de flux**, ce qui permet de tester l'accumulation de la gigue et le calcul des pires délais (Worst-Case Latency).
-
 ---
 
 ## Topology 2: Multi-Hop Mixed-Traffic Network
-**Source:** [Zhao, L., Pop, P., & Craciunas, S. S. (2018). "Worst-Case Latency Analysis for IEEE 802.1Qbv Time Sensitive Networks Using Network Calculus". *IEEE Access*, vol. [cite_start]6, pp. 41803-41819.](https://ieeexplore.ieee.org/document/8418352) [cite: 2]
+**Source:** [Zhao, L., Pop, P., & Craciunas, S. S. (2018). "Worst-Case Latency Analysis for IEEE 802.1Qbv Time Sensitive Networks Using Network Calculus". *IEEE Access*, vol. [cite_start]6, pp. 41803-41819.](https://ieeexplore.ieee.org/document/8418352) 
 
 ```mermaid
 graph TD
@@ -89,4 +85,3 @@ graph TD
 1.  **Topologie 1 (Aérospatiale) :** Teste la robustesse via la **redondance** (plusieurs chemins physiques).
 2.  **Topologie 2 (Zhao et al.) :** Teste la performance temporelle via le **multi-sauts** (un seul chemin critique partagé par plusieurs flux).
 
-[cite_start]L'utilisation de cette source (Zhao et al., 2018) est très solide car elle provient d'une étude publiée dans **IEEE Access** qui fait référence pour l'analyse des délais par le calcul réseau (Network Calculus)[cite: 2, 97].
