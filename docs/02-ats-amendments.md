@@ -23,6 +23,10 @@ The main goal of this file is to summarize the **IEEE 802.1Qcr** 2020 amendments
     - [2.1.1- ATS Scheduler Components (Individual / Per-Stream)](#211--ats-scheduler-components-individual--per-stream)
     - [2.1.2- ATS Scheduler Group Components (Per Port/Traffic Class)](#212--ats-scheduler-group-components-per-porttraffic-class)
     - [2.1.3- Global Variables and Tables](#213--global-variables-and-tables)
+  - [3.1- Frame Queuing \& Priority Mapping (Section 8.6.6)](#31--frame-queuing--priority-mapping-section-866)
+  - [4- ATS Transmission Selection Algorithm (Section 8.6.8.5)](#4--ats-transmission-selection-algorithm-section-8685)
+    - [4.1- Eligibility and Selectability Conditions](#41--eligibility-and-selectability-conditions)
+    - [4.2- Transmission Ordering Rules](#42--transmission-ordering-rules)
   - [Global Processing Pipeline and Project Status](#global-processing-pipeline-and-project-status)
 
 # 1- Per-Stream Filtering and Policing (PSFP) & Stream Gating
@@ -142,6 +146,27 @@ Each group comprises the following:
 * **DiscardedFramesCount**: A per-reception-port integer counter tracking the total number of frames discarded by the ATS schedulers associated with that port (e.g., due to a *MaximumResidenceTime* violation).
 * The bridge component maintains three management tables: the *ATS Scheduler Instance Table*, the *ATS Scheduler Group Instance Table*, and an *ATS Scheduler Port Parameter Table* shared by all schedulers associated with a reception Port.
 
+## 3.1- Frame Queuing & Priority Mapping (Section 8.6.6)
+
+The Forwarding Process provides one or more queues per Bridge Port, each strictly corresponding to a distinct **Traffic Class**. Instead of blindly using the frame's original priority header, the mapping to a Traffic Class depends on the **Stream Gate outcome**:
+* **If Stream Gates are unsupported / bypassed**: The frame's original priority is used.
+* **If Stream Gates are supported & IPV is `Null`**: The frame's original priority is used.
+* **If Stream Gates are supported & an IPV is explicitly assigned**: **The IPV completely overrides the original priority** to index the Port's Traffic Class Table (up to 8 classes). 
+
+## 4- ATS Transmission Selection Algorithm (Section 8.6.8.5)
+
+
+### 4.1- Eligibility and Selectability Conditions
+A frame stored in an ATS-supported queue becomes available for physical transmission selection if and only if it is **eligible**:
+* **Eligibility Condition**: The frame's assigned eligibility time ($t_E$) must be less than or equal to the current time ($t \ge t_E$).
+* **TransmissionSelection Clock**: The current time is provided by a local clock. 
+* **Selectability Time**: This is the exact reference time at which a frame enters the queue and becomes available for selection.
+
+### 4.2- Transmission Ordering Rules
+When the port scans the queues to transmit frames, it enforces a strict ordering based on time:
+1. **Ascending $t_E$ Order**: Frames that have reached their selectability time are selected and sent in strict ascending order of their assigned eligibility times (the smallest $t_E$ is sent first).
+2. **Tie-Breaking Rule**: If multiple frames share the exact same eligibility time ($t_{E_1} = t_{E_2}$), the transmission selection must preserve their original arrival sequence (FIFO ordering requirement from 8.6.6).
+
 
 ## Global Processing Pipeline and Project Status
 
@@ -188,4 +213,4 @@ graph TD
     class B,C,Drop1,D,E,Drop2,F,G,H,Drop3,I done;
     class J,K,L,Drop4,M,N todo;
     class O,P,Q,R global;
-
+```

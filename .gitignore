@@ -3,3 +3,4 @@ cmake-cache/
 .vscode/
 *.pcap
 *.xml
+.DS_Store
