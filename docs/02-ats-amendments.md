@@ -198,7 +198,7 @@ graph TD
         J --> K(Mathematical Calculation of Eligibility Time: t_e)
         K --> L{t_e - arrival_time > MaxResidenceTime ?}
         L -- Yes Deadline Exceeded --> Drop4[Drop & DiscardedFramesCount++]
-        L -- No Compliant --> M(Update BucketEmptyTime & GroupEligibilityTime)
+        L -- Non-Oversized --> M(Update BucketEmptyTime & GroupEligibilityTime)
         M --> N(Enqueue into Group FIFO Queue)
     end
 
@@ -210,7 +210,7 @@ graph TD
     end
 
     %% Class Assignment
-    class B,C,Drop1,D,E,Drop2,F,G,H,Drop3,I done;
-    class J,K,L,Drop4,M,N todo;
+    class B,C,Drop1,D,E,Drop2,G,H,Drop3,I done;
+    class F,J,K,L,Drop4,M,N todo;
     class O,P,Q,R global;
 ```
