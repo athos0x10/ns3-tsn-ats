@@ -29,6 +29,8 @@ The main goal of this file is to summarize the **IEEE 802.1Qcr** 2020 amendments
   - [4- ATS Transmission Selection Algorithm (Section 8.6.8.5)](#4--ats-transmission-selection-algorithm-section-8685)
     - [4.1- Eligibility and Selectability Conditions](#41--eligibility-and-selectability-conditions)
     - [4.2- Transmission Ordering Rules](#42--transmission-ordering-rules)
+  - [5- ATS scheduler state machines](#5--ats-scheduler-state-machines)
+  - [5.1- Process Frame description](#51--process-frame-description)
   - [Global Processing Pipeline and Project Status](#global-processing-pipeline-and-project-status)
 
 # 1- Per-Stream Filtering and Policing (PSFP) & Stream Gating
@@ -42,7 +44,7 @@ In this section, we will go through all these policies.
 The system analyzes the packet headers (such as Source/Destination MAC addresses, VLAN ID, and Priority) to map the packet to a specific, recognized stream handle.
 
 It is done in the *eden-sim/contrib/tsn/model/psfp-stream-filter-instance.cc* file, in the following function:
-```C
+```cpp
 bool
 StreamFilterInstance::Match(uint16_t streamHandle, uint8_t priority)
 ```
@@ -54,7 +56,7 @@ If it does match with the stream then we increment the counter **MatchingFramesC
 Unlike the Time-Aware Shaper (TAS), ATS does not allocate dedicated time slots, making frame preemption complex. To guarantee low-latency bounds for high-priority traffic, large rogue packets must be blocked. The system checks if the frame size is below the maximum Service Data Unit size (*MaxSDUSize*) configured for this stream. If it exceeds this threshold, the packet is immediately dropped.
 
 It is done in the *eden-sim/contrib/tsn/model/psfp-stream-filter-instance.cc* file, in the following function:
-```C
+```cpp
 bool
 StreamFilterInstance::MaxSDUSizeFilter(Ptr<Packet> packet)
 ```
@@ -100,7 +102,7 @@ bool
 TransmissionGate::IsOpen()
 ```
 to see if the gate is open but we have to implement the IPV feature which consist of a private attribute for each instance and that we can configure with the following fuction to implement:
-```C
+```cpp
 void SetGateAndIPV(StreamGateState, IPV, TimeInterval, [IntervalOctetMax])
 ```
 
@@ -132,12 +134,12 @@ To halt massive traffic violations at the root, the flow meter can permanently l
 
 ### 1.4.5- What to use 
 The **MEF 10.3** is already implemented in the following function:
-```C
+```cpp
 bool
 FlowMeterInstance::Test(Ptr<Packet> packet)
 ```
 which is using the 
-```C
+```cpp
 void
 FlowMeterInstance::updateTokenBuckets()
 ```
@@ -193,6 +195,48 @@ When the port scans the queues to transmit frames, it enforces a strict ordering
 1. **Ascending $t_E$ Order**: Frames that have reached their selectability time are selected and sent in strict ascending order of their assigned eligibility times (the smallest $t_E$ is sent first).
 2. **Tie-Breaking Rule**: If multiple frames share the exact same eligibility time ($t_{E_1} = t_{E_2}$), the transmission selection must preserve their original arrival sequence (FIFO ordering requirement from 8.6.6).
 
+## 5- ATS scheduler state machines 
+
+The ATS scheduler is started everytime a packet arrived to his assigned stream right after the frame is processed.
+```C
+void ProcessFrame(Packet)
+```
+According to this, we must check the local clock of the ATS instance. We asssume that clocks are the same for each instance of ATS in a switch so that in **NS3** the local clock is the clock of the simulator as this clock is perfect and is the same for every device in the simulation.
+
+It means that we don't have to compute an **Offset variation** value between the time we start to process the frame and the moment when the selection is done as we are working with a perfect environment.
+
+## 5.1- Process Frame description
+
+```cpp
+ProcessFrame(frame) {
+  lengthRecoveryDuration = length(frame)/
+    CommittedInformationRate;
+
+  emptyToFullDuration = CommittedBurstSize/
+    CommittedInformationRate;
+  schedulerEligibilityTime = BucketEmptyTime +
+    lengthRecoveryDuration;
+  bucketFullTime = BucketEmptyTime +
+    emptyToFullDuration;
+  eligibilityTime = max(arrivalTime(frame),
+    GroupEligibilityTime,
+  schedulerEligibilityTime);
+  if (eligibilityTime <= (arrivalTime(frame) + MaxResidenceTime/1.0e9)){
+    // The frame is valid
+    GroupEligibilityTime = eligibilityTime;
+    BucketEmptyTime = (eligibilityTime < bucketFullTime) ?
+      schedulerEligibilityTime :
+        schedulerEligibilityTime + eligibilityTime – bucketFullTime;
+    AssignAndProceed(frame,eligibilityTime);
+  } else {
+    // The frame is invalid
+    Discard(frame);
+  }
+}
+```
+Here we have a pseudo code implementation of the ATs core process. We might decide which precision fits the best for us.
+
+Concerning the arrivalTime I take the decision that it's going to be at the moment **ProcessFrame** is called so that it can be the first value we compute during the process. It is the lastest time the standard recommend and it does not change that much if we take it at an other moment while it is the same for all group of ATS because otherwise we will encounter many troubles in the FIFO egress queue.
 
 ## Global Processing Pipeline and Project Status
 
