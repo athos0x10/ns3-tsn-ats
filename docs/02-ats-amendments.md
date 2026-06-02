@@ -14,11 +14,13 @@ The main goal of this file is to summarize the **IEEE 802.1Qcr** 2020 amendments
     - [1.3.2- PSFP \& Control Operations](#132--psfp--control-operations)
     - [1.3.3- Defensive Features (Permanent Lockdown)](#133--defensive-features-permanent-lockdown)
     - [1.3.4- Statistical Counters](#134--statistical-counters)
+    - [1.3.5- TODO](#135--todo)
   - [1.4- Flow Meter (Bandwidth Policing - Section 8.6.5.5)](#14--flow-meter-bandwidth-policing---section-8655)
     - [1.4.1- Core Architectural Parameters (MEF 10.3)](#141--core-architectural-parameters-mef-103)
     - [1.4.2- Policing Verdict \& Frame Marking](#142--policing-verdict--frame-marking)
     - [1.4.3- Defensive Features](#143--defensive-features)
     - [1.4.4- Statistical Counters](#144--statistical-counters)
+    - [1.4.5- What to use](#145--what-to-use)
   - [2.1- ATS Eligibility Time Assignment (Section 8.6.5.6)](#21--ats-eligibility-time-assignment-section-8656)
     - [2.1.1- ATS Scheduler Components (Individual / Per-Stream)](#211--ats-scheduler-components-individual--per-stream)
     - [2.1.2- ATS Scheduler Group Components (Per Port/Traffic Class)](#212--ats-scheduler-group-components-per-porttraffic-class)
@@ -90,6 +92,18 @@ The gating outcome explicitly updates the management counters located inside the
 * **`PassingFrameCount`**: Incremented every time a frame successfully passes through the stream gate.
 * **`NotPassingFrameCount`**: Incremented every time a frame is discarded (due to a closed state, octet limit overflow, or permanent lockdown).
 
+### 1.3.5- TODO
+
+For now we can use the 
+```C
+bool
+TransmissionGate::IsOpen()
+```
+to see if the gate is open but we have to implement the IPV feature which consist of a private attribute for each instance and that we can configure with the following fuction to implement:
+```C
+void SetGateAndIPV(StreamGateState, IPV, TimeInterval, [IntervalOctetMax])
+```
+
 ## 1.4- Flow Meter (Bandwidth Policing - Section 8.6.5.5)
 
 The **Flow Meter** enforces bandwidth limits to protect network resources from misbehaving streams. It implements a simplified version of the **MEF 10.3 Dual-Rate Three-Color Marker** algorithm (Token Bucket).
@@ -115,6 +129,18 @@ To halt massive traffic violations at the root, the flow meter can permanently l
 
 ### 1.4.4- Statistical Counters
 * **`RedFramesCount`**: Every time the flow meter discards a frame (due to a Red verdict, a `DropOnYellow` rule, or a permanent lockdown).
+
+### 1.4.5- What to use 
+The **MEF 10.3** is already implemented in the following function:
+```C
+bool
+FlowMeterInstance::Test(Ptr<Packet> packet)
+```
+which is using the 
+```C
+void
+FlowMeterInstance::updateTokenBuckets()
+```
 
 ## 2.1- ATS Eligibility Time Assignment (Section 8.6.5.6)
 
@@ -170,7 +196,7 @@ When the port scans the queues to transmit frames, it enforces a strict ordering
 
 ## Global Processing Pipeline and Project Status
 
-Here is the complete architecture of the TSN pipeline you are building. This diagram illustrates the exact path of a packet, highlighting **what has already been implemented** (PSFP + basic Gate components) and **what needs to be coded next** (the central ATS block).
+Here is the complete architecture of the TSN pipeline you are building. This diagram illustrates the exact path of a packet, highlighting **what has already been implemented**  and **what needs to be coded next**.
 
 ```mermaid
 graph TD
