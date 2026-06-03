@@ -81,6 +81,12 @@ StreamGate::GetIpvId()
     return m_ipv;
 }
 
+bool
+StreamGate::GetIpvEnable()
+{
+    return m_ipvEnable;
+}
+
 void
 StreamGate::SetGateAndIpv(State gateState, uint8_t ipvId, Time startTime)
 {

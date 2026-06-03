@@ -63,6 +63,7 @@ namespace ns3
         void Open();
         void Close();
         uint8_t GetIpvId();
+        bool GetIpvEnable();
 
     protected:
     private:
