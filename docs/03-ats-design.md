@@ -96,8 +96,14 @@ Most of the flow meters are already here but maybe not everything is at the righ
  - MarkAllFramesRed (boolean) -> done
 
  ## UML class 
-```mermaid
- classDiagram
+ ```mermaid
+classDiagram
+    %% --- Hiérarchie des Équipements Réseau (Héritage) ---
+    class NetDevice {
+        <<interface>>
+    }
+    class EthernetNetDevice {
+    }
     class TsnNetDevice {
         - Ptr~PsfpStreamFilterTable~ m_filterTable
         - Ptr~AtsScheduler~ m_atsScheduler
@@ -107,7 +113,23 @@ Most of the flow meters are already here but maybe not everything is at the righ
         + uint32_t SupportedListMax$
         + Receive(Ptr~Packet~ packet) void
     }
+    class TsnMultidropNetDevice {
+        - uint8_t m_PLCALocalNodeId
+        - uint8_t m_PLCACurID
+        + PLCA() void
+    }
 
+    NetDevice <|-- EthernetNetDevice : hérite de
+    EthernetNetDevice <|-- TsnNetDevice : hérite de
+    TsnNetDevice <|-- TsnMultidropNetDevice : hérite de
+
+    %% --- Composants d'Horloge ---
+    class Clock {
+        - Time m_correctionOffset
+        + GetLocalTime() Time
+    }
+
+    %% --- Composants PSFP / Shaper Existant ---
     class StreamGateInstance {
         - uint32_t m_flowMeterIdentifier
         - bool m_ipvEnabled
@@ -124,27 +146,33 @@ Most of the flow meters are already here but maybe not everything is at the righ
         + ExecuteTokenBucket(Ptr~Packet~ packet) FlowColor
     }
 
+    %% --- Composants ATS (802.1Qcr) ---
     class AtsScheduler {
-        - map~uint16_t, Ptr~AtsSchedulerInstance~~ m_instances
+        - map~uint32_t, Ptr~AtsSchedulerInstance~~ m_instances
         - map~uint8_t, Ptr~AtsSchedulerGroup~~ m_groups
+        - Ptr~Clock~ m_portClock
         + uint32_t MaxSchedulerInstances$
         + uint32_t MaxSchedulerGroupInstances$
-        + ProcessFrame(Ptr~Packet~ packet, uint16_t streamHandle, uint8_t ipv) void
+        + ProcessFrame(Ptr~Packet~ packet, uint16_t streamHandle, uint8_t pcp) void
     }
 
     class AtsSchedulerInstance {
-        - uint64_t m_cir
-        - uint32_t m_cbs
+        - uint32_t m_schedulerIdentifier
+        - uint8_t m_schedulerGroupIdentifier
+        - uint32_t m_committedBurstSizeParameter
+        - uint64_t m_committedInformationRate
         - Time m_bucketEmptyTime
         - Time m_emptyToFullDuration
+        - Ptr~Clock~ m_clock
         + CalculateSchedulerEligibility(uint32_t size) Time
     }
 
     class AtsSchedulerGroup {
-        - uint8_t m_ipv
+        - uint8_t m_schedulerGroupIdentifier
+        - Time m_maximumResidenceTime
         - Time m_groupEligibilityTime
-        - Time m_maxResidenceTime
         - queue~Ptr~Packet~~ m_groupQueue
+        - Ptr~Clock~ m_clock
         + Enqueue(Ptr~Packet~ packet, Time schedEligTime) void
         + PeekTopPacket() Ptr~Packet~
         + DequeueTopPacket() Ptr~Packet~
@@ -156,14 +184,18 @@ Most of the flow meters are already here but maybe not everything is at the righ
         + GetEligibilityTime() Time
     }
 
-    %% Relations de composition et d'utilisation
+    %% --- Relations et Dépendances ---
     TsnNetDevice "1" *-- "1" AtsScheduler : contient & orchestre
     TsnNetDevice ..> StreamGateInstance : utilise au Receive
     StreamGateInstance "1" --> "1" PsfpFlowMeterInstance : pointe vers l'ID
 
-    %% Contraintes de cardinalité basées sur la Clause 12.31.1
-    AtsScheduler "1" *-- "0..MaxSchedulerInstances" AtsSchedulerInstance : gère par streamHandle
-    AtsScheduler "1" *-- "0..MaxSchedulerGroupInstances" AtsSchedulerGroup : possède par IPV
+    AtsScheduler "1" *-- "0..MaxSchedulerInstances" AtsSchedulerInstance : gère par schedulerIdentifier
+    AtsScheduler "1" *-- "0..MaxSchedulerGroupInstances" AtsSchedulerGroup : possède par groupIdentifier
     
     AtsSchedulerGroup ..> AtsEligibilityTimeTag : tatoue les paquets stockés
+
+    %% Liaisons vers l'Horloge
+    AtsScheduler "1" --> "1" Clock : interroge
+    AtsSchedulerInstance "1" --> "1" Clock : interroge
+    AtsSchedulerGroup "1" --> "1" Clock : interroge
 ```

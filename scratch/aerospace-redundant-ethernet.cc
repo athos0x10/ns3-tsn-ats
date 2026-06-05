@@ -1,5 +1,5 @@
 /**
- * @file aerospace-redundant.cc
+ * @file aerospace-redundant-ethernet.cc
  * @author Arthur
  * @brief Testbench for aerospace redundant topology simulation using ns-3.
  * * @note Refactoring: NetDevice naming convention updated to
@@ -18,7 +18,7 @@
 //             |        \     /        |
 //             |         \   /         |
 //      _______v_______   \ /   _______v_______
-//     |     n2          |   X |      n3       |
+//     |     n2        |   X   |      n3       |
 //     |  ETH SWITCH A |  / \  |  ETH SWITCH B |
 //     |_______________| /   \ |_______________|
 //             |         \   /         |
@@ -61,7 +61,8 @@ NS_LOG_COMPONENT_DEFINE("RedundantSimulation");
  * device name).
  * @param p Pointer to the packet being transmitted.
  */
-static void MacTxCallback(std::string context, Ptr<const Packet> p) {
+static void MacTxCallback(std::string context, Ptr<const Packet> p)
+{
   NS_LOG_INFO((Simulator::Now()).As(Time::S)
               << " \t" << context << " : Pkt #" << p->GetUid() << " sent!");
 }
@@ -73,12 +74,14 @@ static void MacTxCallback(std::string context, Ptr<const Packet> p) {
  * device name).
  * @param p Pointer to the packet being received.
  */
-static void MacRxCallback(std::string context, Ptr<const Packet> p) {
+static void MacRxCallback(std::string context, Ptr<const Packet> p)
+{
   NS_LOG_INFO((Simulator::Now()).As(Time::S)
               << " \t" << context << " : Pkt #" << p->GetUid() << " received!");
 }
 
-int main(int argc, char *argv[]) {
+int main(int argc, char *argv[])
+{
   // Enable logging (for debug)
   LogComponentEnable("RedundantSimulation", LOG_LEVEL_INFO);
 
@@ -189,8 +192,10 @@ int main(int argc, char *argv[]) {
       dev_FCC_SW1, dev_FCC_SW2, dev_SW1_AS0, dev_SW1_AS1,
       dev_SW1_FCC, dev_SW2_AS0, dev_SW2_AS1, dev_SW2_FCC};
   // We use two queues one for each priority
-  for (int i = 0; i < 2; i++) {
-    for (auto d : allDevices) {
+  for (int i = 0; i < 2; i++)
+  {
+    for (auto d : allDevices)
+    {
       queue = CreateObject<DropTailQueue<Packet>>();
       d->SetQueue(queue);
     }

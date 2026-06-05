@@ -148,11 +148,11 @@ FlowMeterInstance::updateTokenBuckets()
 
 The role of the Asynchronous Traffic Shaping (ATS) scheduler is to assign an **Eligibility Time** ($t_E$) to each frame. This calculated time is subsequently used by the ATS transmission selection algorithm (8.6.8.5) to shape and smooth traffic asynchrononously.
 
-The standard structures this mechanism using two key entities: the **Individual Scheduler** (per-stream) and the **Scheduler Group**.
+The standard structures this mechanism using two key entities: the **Scheduler Instance** and the **Scheduler Group**.
 
 ### 2.1.1- ATS Scheduler Components (Individual / Per-Stream)
 
-Each ATS scheduler instance manages a unique data stream and comprises the following:
+Each ATS scheduler instance manages comprises the following:
 
 * **Scheduler Identifier**: A unique integer indexing the instance within the global table.
 * **Scheduler Group Identifier**: The identifier of the scheduler group to which this scheduler belongs.
