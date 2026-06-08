@@ -93,58 +93,70 @@ Most of the flow meters are already here but maybe not everything is at the righ
  ## UML class 
 ```mermaid
 classDiagram
-    %% --- Hiérarchie des Équipements Réseau ---
-    class NetDevice {
-        <<interface>>
-    }
-    class EthernetNetDevice {
-    }
+    %% --- Matériel / Port Réseau ---
     class TsnNetDevice {
         - Ptr~PsfpStreamFilterTable~ m_filterTable
-        - Ptr~AtsScheduler~ m_atsScheduler
+        - Ptr~Tas~ m_tas
+        - std::vector~Ptr~TsnTransmissionSelectionAlgo~~ m_txAlgos
         + Receive(Ptr~Packet~ packet) void
+        + SendFrom(Ptr~Packet~ packet, ...) bool
+        + CheckForReadyPacket() void
     }
-    class TsnMultidropNetDevice {
-    }
-
-    NetDevice <|-- EthernetNetDevice
-    EthernetNetDevice <|-- TsnNetDevice
-    TsnNetDevice <|-- TsnMultidropNetDevice
 
     %% --- Composant d'Horloge ---
     class Clock {
         + GetLocalTime() Time
     }
 
-    %% --- Composants PSFP Existants ---
-    class StreamGateInstance {
-        - uint32_t m_flowMeterIdentifier
-        - uint8_t m_ipvId
-    }
-    class PsfpFlowMeterInstance {
-        + ExecuteTokenBucket(Ptr~Packet~ packet) FlowColor
+    %% --- Composants d'Arbitrage et Portes (TAS - 802.1Qbv) ---
+    class Tas {
+        - std::vector~Ptr~TransmissionGate~~ m_transmissionGates
+        - std::vector~GclEntry~ m_GateControlList
+        - Callback~void~ GateUpdateCallback
+        + IsSendable(Ptr~Packet~ p, ...) bool
+        - UpdateGates(bool clockUpdate) void
     }
 
-    %% --- Nouvelle Architecture ATS Centralisée (802.1Qcr) ---
+    %% --- Abstraction de Sélection de Transmission (TSA) ---
+    class TsnTransmissionSelectionAlgo {
+        <<abstract>>
+        # Ptr~TsnNetDevice~ m_net
+        # Ptr~Queue~Packet~~ m_queue
+        # Callback~void~ ReadyToTransmitCallback
+        + SetTsnNetDevice(Ptr~TsnNetDevice~ net) void
+        + virtual IsReadyToTransmit() bool
+        + virtual TransmitStart(Ptr~Packet~ p, Time txTime) void
+    }
+
+    %% --- Spécification ATS (802.1Qcr) sous forme de TSA ---
+    class AtsTransmissionSelectionAlgo {
+        - Ptr~AtsScheduler~ m_atsScheduler
+        + IsReadyToTransmit() bool override
+        + TransmitStart(Ptr~Packet~ p, Time txTime) void override
+    }
+
     class AtsScheduler {
         - Ptr~Clock~ m_clock
-        - Ptr~TsnNetDevice~ m_device
+        - Ptr~TsnNetDevice~ m_netDevice
         - Time m_groupEligibilityTime
         - Time m_maximumResidenceTime
         - Ptr~AtsSchedulerInstance~ m_defaultInstance
-        - map~uint32_t, Ptr~AtsSchedulerInstance~~ m_streamToInstanceMap
+        - map~uint32_t, Ptr~AtsSchedulerInstance~~ m_streamHandlerToInstanceMap
         - multiset~Ptr~Packet~, AtsPacketCompare~ m_calendarQueue
-        + ProcessFrame(Ptr~Packet~ packet, uint32_t streamHandle, uint8_t pcp) bool
-        + RegisterStreamToInstance(uint32_t streamHandle, Ptr~AtsSchedulerInstance~ instance) void
+        - EventId m_nextAtsTransmissionEvent
+        + ProcessPacket(Ptr~Packet~ packet, uint32_t streamHandler, uint8_t pcp) bool
+        + RegisterStreamToInstance(uint32_t streamHandler, uint32_t instanceId) bool
+        + PeekTopPacket() Ptr~Packet~
+        + DequeueTopPacket() void
+        + GetNextEligibilityTime() Time
+        - TriggerQueueCheck() void
     }
 
     class AtsSchedulerInstance {
         - uint32_t m_schedulerIdentifier
-        - uint8_t m_schedulerGroupIdentifier
         - DataRate m_committedInformationRate
         - uint32_t m_committedBurstSize
         - Time m_bucketEmptyTime
-        - Time m_emptyToFullDuration
         + GetCir() DataRate
         + GetCbs() uint32_t
         + GetBucketEmptyTime() Time
@@ -153,21 +165,32 @@ classDiagram
 
     class AtsEligibilityTimeTag {
         - Time m_eligibilityTime
+        - uint8_t m_pcp
         + SetEligibilityTime(Time t) void
         + GetEligibilityTime() Time
+        + SetPcp(uint8_t pcp) void
+        + GetPcp() uint8_t
     }
 
-    %% --- Relations et Dépendances ---
-    TsnNetDevice "1" *-- "1" AtsScheduler : contient & orchestre
-    StreamGateInstance "1" --> "1" PsfpFlowMeterInstance : pointe vers
-
-    %% L'ATS possède et gère de façon flexible les instances de stockage
-    AtsScheduler "1" *-- "1" AtsSchedulerInstance : instance par défaut (PCP/Port)
-    AtsScheduler "1" *-- "0..*" AtsSchedulerInstance : instances configurées (m_streamToInstanceMap)
+    %% --- Liaisons, Héritages et Dépendances ---
     
-    %% Gestion des paquets
-    AtsScheduler ..> AtsEligibilityTimeTag : tatoue et lit les paquets dans m_calendarQueue
+    %% Héritage du sélecteur de transmission
+    TsnTransmissionSelectionAlgo <|-- AtsTransmissionSelectionAlgo : Spécifie / Hérite
+    
+    %% Composition et Agrégation au sein du Port (NetDevice)
+    TsnNetDevice "1" *-- "1" Tas : Possède & interroge pour envoi
+    TsnNetDevice "1" *-- "0..*" TsnTransmissionSelectionAlgo : Gère l'arbitrage des queues
+    
+    %% Architecture Interne ATS
+    AtsTransmissionSelectionAlgo "1" --> "1" AtsScheduler : Délègue la vérification de la queue temporelle
+    AtsScheduler "1" *-- "1" AtsSchedulerInstance : Instance par défaut
+    AtsScheduler "1" *-- "0..*" AtsSchedulerInstance : Instances spécifiques (m_streamHandlerToInstanceMap)
+    
+    %% Tags et Horloge
+    AtsScheduler ..> AtsEligibilityTimeTag : Inspecte et Tatoue les paquets dans m_calendarQueue
+    AtsScheduler "1" --> "1" Clock : Utilise comme source de temps matériel unique
 
-    %% L'horloge est centralisée au niveau du Scheduler
-    AtsScheduler "1" --> "1" Clock : interroge
+    %% Cycle de Rappel (Callbacks de réveil de simulation)
+    Tas ..> TsnNetDevice : Déclenche GateUpdateCallback -> CheckForReadyPacket()
+    AtsScheduler ..> TsnNetDevice : Réveille via TriggerQueueCheck() à l'échéance d'un timer
 ```
