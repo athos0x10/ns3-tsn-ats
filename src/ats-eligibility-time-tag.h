@@ -47,7 +47,7 @@ namespace ns3
         void SetEligibilityTime(Time time);
         Time GetEligibilityTime() const;
 
-        // PCP or IPV priority value, range from 0 to 7
+        // PCP or IPV, range from 0 to 7
         void SetPriority(uint8_t priority);
         uint8_t GetPriority() const;
 

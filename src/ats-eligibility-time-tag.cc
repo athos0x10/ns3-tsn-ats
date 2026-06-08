@@ -17,8 +17,6 @@ namespace ns3
     }
 
     AtsEligibilityTimeTag::AtsEligibilityTimeTag()
-        : m_eligibilityTime(Seconds(0)),
-          m_priority(0)
     {
         NS_LOG_FUNCTION(this);
     }
