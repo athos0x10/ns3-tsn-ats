@@ -16,7 +16,6 @@ First we will describe the whole pipeline that a frame will go in with the ATS a
 ## ATS Pipeline
 
 Below is the conceptual pipeline a frame goes through upon arrival at the bridge.
-
 ```mermaid
 graph TD
     %% Nodes Definition
@@ -29,18 +28,15 @@ graph TD
     end
     
     subgraph AtsCore[Core Processing: ATS Scheduler]
-        subgraph Group1[ATS Scheduler Group: Priority X]
+        subgraph GroupInput1[ATS Scheduler Group: Input Port 1]
             Inst1[ATS Instance: Stream A]
             Inst2[ATS Instance: Stream B]
-        end
-        subgraph Group2[ATS Scheduler Group: Priority Y]
-            Inst3[ATS Instance: Stream C]
+            Inst3[ATS Instance: Stream C<br><i>Flexible Allocation</i>]
         end
     end
 
     subgraph EgressPipeline[Egress Pipeline: Storage & Selection]
-        Fifo1[Group FIFO Queue X<br><i>Ordered by Eligibility Time</i>]
-        Fifo2[Group FIFO Queue Y<br><i>Ordered by Eligibility Time</i>]
+        SmartQueue[Smart Calendar Queue<br><i>1. Ordered by Eligibility Time<br>2. Tie-Breaker: Priority PCP/IPV</i>]
         TxSelect{Transmission Selection<br><i>Strict Priority Scan</i>}
         Cable([Physical Medium / Cable])
     end
@@ -54,16 +50,15 @@ graph TD
     Meter -.->|Alternative Route| Inst2
     Meter -.->|Alternative Route| Inst3
     
-    Inst1 -->|5. Compute schedulerEligibilityTime| Fifo1
-    Inst2 -->|5. Compute schedulerEligibilityTime| Fifo1
-    Inst3 -->|5. Compute schedulerEligibilityTime| Fifo2
+    Inst1 -->|5. Compute schedulerEligibilityTime| SmartQueue
+    Inst2 -->|5. Compute schedulerEligibilityTime| SmartQueue
+    Inst3 -->|5. Compute schedulerEligibilityTime| SmartQueue
     
-    Fifo1 -->|6. Peek Top Frame| TxSelect
-    Fifo2 -->|6. Peek Top Frame| TxSelect
+    SmartQueue -->|6. Peek Top Frame<br>Earliest Time + Highest Priority| TxSelect
     
     TxSelect -->|7. If Now >= eligibilityTime<br>Strict Priority Order| Cable
 
-    %% Style / Color customization (Optional but nice in Markdown)
+    %% Style / Color customization
     style Ingress fill:#f9f,stroke:#333,stroke-width:2px
     style Cable fill:#9f9,stroke:#333,stroke-width:2px
     style ReceivePipeline fill:#f5f5f5,stroke:#999,stroke-dasharray: 5 5
@@ -96,9 +91,9 @@ Most of the flow meters are already here but maybe not everything is at the righ
  - MarkAllFramesRed (boolean) -> done
 
  ## UML class 
- ```mermaid
+```mermaid
 classDiagram
-    %% --- Hiérarchie des Équipements Réseau (Héritage) ---
+    %% --- Hiérarchie des Équipements Réseau ---
     class NetDevice {
         <<interface>>
     }
@@ -107,75 +102,53 @@ classDiagram
     class TsnNetDevice {
         - Ptr~PsfpStreamFilterTable~ m_filterTable
         - Ptr~AtsScheduler~ m_atsScheduler
-        + uint32_t MaxStreamFilterInstances$
-        + uint32_t MaxStreamGateInstances$
-        + uint32_t MaxFlowMeterInstances$
-        + uint32_t SupportedListMax$
         + Receive(Ptr~Packet~ packet) void
     }
     class TsnMultidropNetDevice {
-        - uint8_t m_PLCALocalNodeId
-        - uint8_t m_PLCACurID
-        + PLCA() void
     }
 
-    NetDevice <|-- EthernetNetDevice : hérite de
-    EthernetNetDevice <|-- TsnNetDevice : hérite de
-    TsnNetDevice <|-- TsnMultidropNetDevice : hérite de
+    NetDevice <|-- EthernetNetDevice
+    EthernetNetDevice <|-- TsnNetDevice
+    TsnNetDevice <|-- TsnMultidropNetDevice
 
-    %% --- Composants d'Horloge ---
+    %% --- Composant d'Horloge ---
     class Clock {
-        - Time m_correctionOffset
         + GetLocalTime() Time
     }
 
-    %% --- Composants PSFP / Shaper Existant ---
+    %% --- Composants PSFP Existants ---
     class StreamGateInstance {
         - uint32_t m_flowMeterIdentifier
-        - bool m_ipvEnabled
         - uint8_t m_ipvId
-        + SetGateAndIPV(State, ipv, ipvEnabled, startTime) void
-        + GetIpvId() uint8_t
     }
-
     class PsfpFlowMeterInstance {
-        - uint32_t m_flowMeterIdentifier
-        - uint64_t m_cir
-        - uint32_t m_cbs
-        - TracedValue~uint64_t~ m_redFramesCount
         + ExecuteTokenBucket(Ptr~Packet~ packet) FlowColor
     }
 
-    %% --- Composants ATS (802.1Qcr) ---
+    %% --- Nouvelle Architecture ATS Centralisée (802.1Qcr) ---
     class AtsScheduler {
-        - map~uint32_t, Ptr~AtsSchedulerInstance~~ m_instances
-        - map~uint8_t, Ptr~AtsSchedulerGroup~~ m_groups
-        - Ptr~Clock~ m_portClock
-        + uint32_t MaxSchedulerInstances$
-        + uint32_t MaxSchedulerGroupInstances$
-        + ProcessFrame(Ptr~Packet~ packet, uint16_t streamHandle, uint8_t pcp) void
+        - Ptr~Clock~ m_clock
+        - Ptr~TsnNetDevice~ m_device
+        - Time m_groupEligibilityTime
+        - Time m_maximumResidenceTime
+        - Ptr~AtsSchedulerInstance~ m_defaultInstance
+        - map~uint32_t, Ptr~AtsSchedulerInstance~~ m_streamToInstanceMap
+        - multiset~Ptr~Packet~, AtsPacketCompare~ m_calendarQueue
+        + ProcessFrame(Ptr~Packet~ packet, uint32_t streamHandle, uint8_t pcp) bool
+        + RegisterStreamToInstance(uint32_t streamHandle, Ptr~AtsSchedulerInstance~ instance) void
     }
 
     class AtsSchedulerInstance {
         - uint32_t m_schedulerIdentifier
         - uint8_t m_schedulerGroupIdentifier
-        - uint32_t m_committedBurstSizeParameter
-        - uint64_t m_committedInformationRate
+        - DataRate m_committedInformationRate
+        - uint32_t m_committedBurstSize
         - Time m_bucketEmptyTime
         - Time m_emptyToFullDuration
-        - Ptr~Clock~ m_clock
-        + CalculateSchedulerEligibility(uint32_t size) Time
-    }
-
-    class AtsSchedulerGroup {
-        - uint8_t m_schedulerGroupIdentifier
-        - Time m_maximumResidenceTime
-        - Time m_groupEligibilityTime
-        - queue~Ptr~Packet~~ m_groupQueue
-        - Ptr~Clock~ m_clock
-        + Enqueue(Ptr~Packet~ packet, Time schedEligTime) void
-        + PeekTopPacket() Ptr~Packet~
-        + DequeueTopPacket() Ptr~Packet~
+        + GetCir() DataRate
+        + GetCbs() uint32_t
+        + GetBucketEmptyTime() Time
+        + SetBucketEmptyTime(Time t) void
     }
 
     class AtsEligibilityTimeTag {
@@ -186,16 +159,15 @@ classDiagram
 
     %% --- Relations et Dépendances ---
     TsnNetDevice "1" *-- "1" AtsScheduler : contient & orchestre
-    TsnNetDevice ..> StreamGateInstance : utilise au Receive
-    StreamGateInstance "1" --> "1" PsfpFlowMeterInstance : pointe vers l'ID
+    StreamGateInstance "1" --> "1" PsfpFlowMeterInstance : pointe vers
 
-    AtsScheduler "1" *-- "0..MaxSchedulerInstances" AtsSchedulerInstance : gère par schedulerIdentifier
-    AtsScheduler "1" *-- "0..MaxSchedulerGroupInstances" AtsSchedulerGroup : possède par groupIdentifier
+    %% L'ATS possède et gère de façon flexible les instances de stockage
+    AtsScheduler "1" *-- "1" AtsSchedulerInstance : instance par défaut (PCP/Port)
+    AtsScheduler "1" *-- "0..*" AtsSchedulerInstance : instances configurées (m_streamToInstanceMap)
     
-    AtsSchedulerGroup ..> AtsEligibilityTimeTag : tatoue les paquets stockés
+    %% Gestion des paquets
+    AtsScheduler ..> AtsEligibilityTimeTag : tatoue et lit les paquets dans m_calendarQueue
 
-    %% Liaisons vers l'Horloge
+    %% L'horloge est centralisée au niveau du Scheduler
     AtsScheduler "1" --> "1" Clock : interroge
-    AtsSchedulerInstance "1" --> "1" Clock : interroge
-    AtsSchedulerGroup "1" --> "1" Clock : interroge
 ```
