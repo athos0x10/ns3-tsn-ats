@@ -5,7 +5,6 @@
 #include "ns3/nstime.h"
 #include "ns3/uinteger.h"
 #include "ns3/data-rate.h"
-#include "ns3/clock.h"
 
 namespace ns3
 {
