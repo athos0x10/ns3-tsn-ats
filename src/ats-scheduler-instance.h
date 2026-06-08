@@ -34,29 +34,25 @@ namespace ns3
         AtsSchedulerInstance &operator=(const AtsSchedulerInstance &) = delete;
         AtsSchedulerInstance(const AtsSchedulerInstance &) = delete;
 
-        /**
-         * \brief Calculates the ATS eligibility date of a package.
-         *
-         * \param size Incoming frame size.
-         * \return Time the point at which the packet becomes eligible for transmission.
-         */
-        Time CalculateSchedulerEligibility(uint16_t size);
+        // Getters and setters for attributes so that they can be accessed and modified by ATS Scheduler.
+        DataRate GetCir() const { return m_committedInformationRate; }
+        uint32_t GetCbs() const { return m_committedBurstSize; }
 
-        void SetClock(Ptr<Clock> clock);
+        Time GetBucketEmptyTime() const { return m_bucketEmptyTime; }
+        void SetBucketEmptyTime(Time t) { m_bucketEmptyTime = t; }
+        Time GetEmptyToFullDuration() const { return m_emptyToFullDuration; }
+        void SetEmptyToFullDuration(Time t) { m_emptyToFullDuration = t; }
 
     private:
         // Identification attributes
         uint32_t m_schedulerIdentifier;
         uint8_t m_schedulerGroupIdentifier;
 
-        // Algorithm attributes
+        // Instance attributes
         DataRate m_committedInformationRate;
         uint32_t m_committedBurstSize;
         Time m_bucketEmptyTime;
         Time m_emptyToFullDuration;
-
-        // Copy of the local clock
-        Ptr<Clock> m_clock;
     };
 
 } // namespace ns3

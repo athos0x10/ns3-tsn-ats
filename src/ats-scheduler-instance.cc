@@ -8,6 +8,7 @@ namespace ns3
 
     NS_OBJECT_ENSURE_REGISTERED(AtsSchedulerInstance);
 
+    TypeId
     AtsSchedulerInstance::GetTypeId()
     {
         static TypeId tid =
@@ -32,7 +33,7 @@ namespace ns3
                               MakeDataRateChecker())
                 .AddAttribute("CommittedBurstSize",
                               "The committed burst size (CBS) in bits.",
-                              UintegerValue(12288), // Équivalent par défaut à ~1536 octets
+                              UintegerValue(12288), // Default to 12KB
                               MakeUintegerAccessor(&AtsSchedulerInstance::m_committedBurstSize),
                               MakeUintegerChecker<uint32_t>());
         return tid;
@@ -46,24 +47,6 @@ namespace ns3
     AtsSchedulerInstance::~AtsSchedulerInstance()
     {
         NS_LOG_FUNCTION(this);
-    }
-
-    void
-    AtsSchedulerInstance::SetClock(Ptr<Clock> clock)
-    {
-        NS_LOG_FUNCTION(this << clock);
-        m_clock = clock;
-    }
-
-    Time AtsSchedulerInstance::CalculateSchedulerEligibility(uint16_t size)
-    {
-        NS_LOG_FUNCTION(this << size);
-        NS_ASSERT_MSG(m_clock != nullptr, "AtsSchedulerInstance: Clock pointer is null, call SetClock first.");
-
-        // Retrieve local current time of the device
-        Time currentTime = m_clock->GetLocalTime();
-
-        double lengthRecoveryDuration = static_cast<double>(size) / m_committedInformationRate.GetBitRate();
     }
 
 } // namespace ns3
