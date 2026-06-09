@@ -49,10 +49,9 @@ namespace ns3
          *
          * \param packet The packet to be processed.
          * \param streamHandler The handler of the stream to which the packet belongs.
-         * \param priority The priority of the frame.
          * \return True if the packet is allowed to be transmitted, false if it is dropped
          */
-        bool ProcessPacket(Ptr<Packet> packet, uint32_t streamHandler, uint8_t priority);
+        bool ProcessPacket(Ptr<Packet> packet, uint32_t streamHandler);
 
         /**
          * \brief Create a new AtsSchedulerInstance with the specified attributes.
@@ -128,7 +127,7 @@ namespace ns3
         Time m_maximumResidenceTime;
 
         // Calendar queue to manage packet scheduling based on eligibility time and priority
-        std::multiset<Ptr<Packet>, AtsPacketCompare> m_calendarQueue;
+        std::multiset<Ptr<Packet>, AtsPacketComparator> m_calendarQueue;
         EventId m_nextAtsTransmissionEvent;
         void TriggerQueueCheck();
     };

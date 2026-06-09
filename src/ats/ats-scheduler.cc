@@ -2,6 +2,7 @@
 #include "ns3/log.h"
 #include "ns3/simulator.h"
 #include "ns3/tsn-net-device.h"
+#include "ns3/ethernet-header2.h"
 
 namespace ns3
 {
@@ -34,10 +35,10 @@ namespace ns3
         m_instanceIdCounter = 0; // Start instance IDs from 0
         // create default ATS Scheduler Instance with default attributes
         m_defaultInstance = CreateObject<AtsSchedulerInstance>();
-        m_defaultInstance->SetAttribute("SchedulerIdentifier", 0); // Default instance has ID 0
-        m_defaultInstance->SetAttribute("SchedulerGroupIdentifier", m_schedulerGroupId);
-        m_defaultInstance->SetAttribute("CommittedInformationRate", DataRate("100Mbps"));
-        m_defaultInstance->SetAttribute("CommittedBurstSize", 12288); // Default to 12KB
+        m_defaultInstance->SetAttribute("SchedulerIdentifier", UintegerValue(0)); // Default instance has ID 0
+        m_defaultInstance->SetAttribute("SchedulerGroupIdentifier", UintegerValue(m_schedulerGroupId));
+        m_defaultInstance->SetAttribute("CommittedInformationRate", DataRateValue(DataRate("100Mbps")));
+        m_defaultInstance->SetAttribute("CommittedBurstSize", UintegerValue(12288)); // Default to 12KB
     }
 
     AtsScheduler::~AtsScheduler()
@@ -71,7 +72,7 @@ namespace ns3
         instance->SetAttribute("SchedulerGroupIdentifier", UintegerValue(m_schedulerGroupId));
         instance->SetAttribute("CommittedInformationRate", DataRateValue(cir));
         instance->SetAttribute("CommittedBurstSize", UintegerValue(cbs));
-        newInst->SetBucketEmptyTime(m_clock ? m_clock->GetLocalTime() : Seconds(0));
+        instance->SetBucketEmptyTime(m_clock ? m_clock->GetLocalTime() : Seconds(0));
         m_instanceIdToInstanceMap[instanceId] = instance;
         return instanceId;
     }
@@ -94,15 +95,22 @@ namespace ns3
         return true;
     }
 
-    bool AtsScheduler::ProcessPacket(Ptr<Packet> packet, uint32_t stream_handler, uint8_t priority)
+    bool AtsScheduler::ProcessPacket(Ptr<Packet> packet, uint32_t stream_handler)
     {
         NS_ASSERT_MSG(m_clock != nullptr, "AtsScheduler: Clock non configurée.");
         Time currentTime = m_clock->GetLocalTime();
         uint32_t sizeBits = packet->GetSize() * 8;
 
+        // Retrieve the priority
+        uint8_t priority;
+        Ptr<Packet> packetCopy = packet->Copy();
+        EthernetHeader2 ethHeader;
+        packetCopy->RemoveHeader(ethHeader);
+        priority = ethHeader.GetPcp();
+
         // Check if an instance is associated to the stream
         Ptr<AtsSchedulerInstance> instance = m_defaultInstance;
-        auto it = m_streamHandlerToInstanceMap.find(streamHandler);
+        auto it = m_streamHandlerToInstanceMap.find(stream_handler);
         if (it != m_streamHandlerToInstanceMap.end())
         {
             instance = it->second;
@@ -127,7 +135,7 @@ namespace ns3
         if (eligibilityTime <= (currentTime + m_maximumResidenceTime))
         {
             // The frame is valid
-            m_groupElibilityTime = eligibilityTime;
+            m_groupEligibilityTime = eligibilityTime;
             Time newBucketEmptyTime = (eligibilityTime < bucketFullTime) ? schedulerEligibilityTime : (schedulerEligibilityTime + eligibilityTime - bucketFullTime);
             instance->SetBucketEmptyTime(newBucketEmptyTime);
 
