@@ -25,7 +25,7 @@ namespace ns3
                               "The group identifier to which this scheduler instance belongs.",
                               UintegerValue(0),
                               MakeUintegerAccessor(&AtsSchedulerInstance::m_schedulerGroupIdentifier),
-                              MakeUintegerChecker<uint8_t>())
+                              MakeUintegerChecker<uint32_t>())
                 .AddAttribute("CommittedInformationRate",
                               "The committed information rate (CIR) in bits per second.",
                               DataRateValue(DataRate("100Mbps")),

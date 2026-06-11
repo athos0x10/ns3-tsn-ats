@@ -45,7 +45,7 @@ namespace ns3
     private:
         // Identification attributes
         uint32_t m_schedulerIdentifier;
-        uint8_t m_schedulerGroupIdentifier;
+        uint32_t m_schedulerGroupIdentifier;
 
         // Instance attributes
         DataRate m_committedInformationRate;
