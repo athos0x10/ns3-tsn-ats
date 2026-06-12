@@ -24,7 +24,7 @@ This project was part of my internship in the **Electronic Systems group at Eind
 
 > [!IMPORTANT]
 > To run this project successfully, **eden-sim** and **ns-3.40** must be installed on your system.
-> If you prefer a turnkey, containerized environment to avoid operating system issues, a fully guided solution to containerize the entire setup using Docker is available in ns3-setum.md.
+> If you prefer a turnkey, containerized environment to avoid operating system issues, a fully guided solution to containerize the entire setup using Docker is available in ns3-setup.md.
 
 ### Using the installation script
 
