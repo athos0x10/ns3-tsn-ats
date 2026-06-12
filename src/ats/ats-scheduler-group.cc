@@ -74,7 +74,7 @@ namespace ns3
             NS_LOG_WARN("ATS Scheduler Instance with ID " << instanceId << " does not exist.");
             return false;
         }
-        m_streamHandlerToInstanceMap[streamHandler] = instanceIt;
+        m_streamHandlerToInstanceMap[streamHandler] = instanceIt->second;
         return true;
     }
 
