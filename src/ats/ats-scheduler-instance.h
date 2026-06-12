@@ -39,8 +39,6 @@ namespace ns3
 
         Time GetBucketEmptyTime() const { return m_bucketEmptyTime; }
         void SetBucketEmptyTime(Time t) { m_bucketEmptyTime = t; }
-        Time GetEmptyToFullDuration() const { return m_emptyToFullDuration; }
-        void SetEmptyToFullDuration(Time t) { m_emptyToFullDuration = t; }
 
     private:
         // Identification attributes
@@ -51,7 +49,6 @@ namespace ns3
         DataRate m_committedInformationRate;
         uint32_t m_committedBurstSize;
         Time m_bucketEmptyTime;
-        Time m_emptyToFullDuration;
     };
 
 } // namespace ns3
