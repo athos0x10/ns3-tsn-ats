@@ -62,7 +62,7 @@ namespace ns3
     bool
     AtsSchedulerGroup::AssociateInstanceWithStream(uint32_t instanceId, uint32_t streamHandle)
     {
-        NS_LOG_FUNCTION(this << streamHandler << instanceId);
+        NS_LOG_FUNCTION(this << streamHandle << instanceId);
         if (m_streamHandlerToInstanceMap.find(streamHandler) != m_streamHandlerToInstanceMap.end())
         {
             NS_LOG_WARN("Stream handler " << streamHandler << " already has an associated ATS Scheduler Instance.");
@@ -78,8 +78,8 @@ namespace ns3
         return true;
     }
 
-    void
-    AtsSchedulerGroup::ProcessFrame(Ptr<Packet> packet, uint3é_t streamHandle)
+    bool
+    AtsSchedulerGroup::ProcessFrame(Ptr<Packet> packet, uint32_t streamHandle)
     {
         NS_ASSERT_MSG(m_clock != nullptr, "AtsScheduler: Clock not configured.");
         Time currentTime = m_clock->GetLocalTime();
@@ -94,7 +94,7 @@ namespace ns3
 
         // Check if an instance is associated to the stream
         Ptr<AtsSchedulerInstance> instance = m_defaultInstance;
-        auto it = m_streamHandlerToInstanceMap.find(stream_handler);
+        auto it = m_streamHandlerToInstanceMap.find(streamHandle);
         if (it != m_streamHandlerToInstanceMap.end())
         {
             instance = it->second;
@@ -128,6 +128,7 @@ namespace ns3
             packetInfo.packet = packet;
             packetInfo.priority = priority;
             packetInfo.eligibilityTime = eligibilityTime;
+            packetInfo.streamHandle = streamHandle;
 
             m_calendarQueue.insert(packetInfo);
 
@@ -149,11 +150,48 @@ namespace ns3
             {
                 Simulator::Cancel(m_nextAtsTransmissionEvent);
                 m_nextAtsTransmissionEvent = Simulator::Schedule(delay, &AtsSchedulerGroup::HandleAtsTransmission, this);
+                m_nextAtsTransmissionTime = absoluteTargetTime;
             }
+            return true;
         }
-        return true;
+        NS_LOG_INFO("Packet dropped by ATS Scheduler: eligibility time " << eligibilityTime << " exceeds maximum residence time.");
+        return false; // The packet is dropped
     }
-    NS_LOG_INFO("Packet dropped by ATS Scheduler: eligibility time " << eligibilityTime << " exceeds maximum residence time.");
-    return false; // The packet is dropped
-}
+
+    void
+    AtsSchedulerGroup::HandleAtsTransmission()
+    {
+        NS_LOG_FUNCTION(this);
+
+        if (m_calendarQueue.empty())
+        {
+            NS_LOG_WARN("HandleAtsTransmission called but calendar queue is empty.");
+            return;
+        }
+
+        Time currentTime = m_clock.GetLocalTime();
+
+        // Retrieve the packet to transmit and erase it from the calendarQueue
+        auto it = m_calendarQueue.begin();
+        AtsPacketInfo urgentPacket = *it;
+        m_calendarQueue.erase(it);
+
+        // Forward the packet
+        if (m_netDevice)
+        {
+            m_netDevice->ForwardUp(urgentPacket.packet, m_schedulerGroupId, urgentPacket.priority);
+        }
+
+        // Schedule next packet if any
+        if (!m_calendarQueue.empty())
+        {
+            AtsPacketInfo nextPacket = *m_calendarQueue.begin();
+            Time nextEligibility = nextPacket.eligibilityTime;
+
+            Time delay = (nextEligibility > currentTime) ? (nextEligibility - currentTime) : Seconds(0);
+
+            m_nextAtsTransmissionEvent = Simulator::Schedule(delay, &AtsSchedulerGroup::HandleAtsTransmission, this);
+            m_nextAtsTransmissionTime = currentTime + delay;
+        }
+    }
 }

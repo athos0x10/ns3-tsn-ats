@@ -43,12 +43,14 @@ namespace ns3
          * \var packet The packet to be scheduled.
          * \var priority The priority of the packet, used for tie-breaking in scheduling.
          * \var eligibilityTime The time at which the packet becomes eligible for transmission.
+         * \var streamHandle The handle of the stream to which the packet belongs.
          */
         struct AtsPacketInfo
         {
             Ptr<Packet> packet,
                 uint8_t priority,
                 Time eligibilityTime,
+                uint32_t streamHandle
         };
 
         /**
@@ -75,8 +77,9 @@ namespace ns3
          *
          * \param packet The packet we want to calculate the eligibilityTime.
          * \param streamHandle The handle of the stream.
+         * \return True if the packet is valid and has been added to the calendar queue, false if the packet is dropped.
          */
-        void ProcessFrame(Ptr<Packet> packet, uint32_t streamHandle);
+        bool ProcessFrame(Ptr<Packet> packet, uint32_t streamHandle);
 
         /**
          * \brief Handle the transmission of a frame when its eligibility time is reached.
