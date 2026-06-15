@@ -15,8 +15,8 @@ This project was part of my internship in the **Electronic Systems group at Eind
 
 * */src*: C++ source code for the ATS scheduler.
 * */scratch*: Simulation scenarios and test scripts.
-* */results*: Output data, PCAP captures, and analysis plots.
-* */docs*: Technical notes, references to the 802.1Qcr standard, and the final internship report.
+* */test*: Tests source code.
+* */docs*: Technical notes, references to the 802.1Qcr standard.
 
 ---
 
