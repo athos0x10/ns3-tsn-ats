@@ -1,6 +1,7 @@
 #include "ats-scheduler-group.h"
 
 #include "ns3/log.h"
+#include "ns3/ethernet-header2.h"
 
 namespace ns3
 {
@@ -20,6 +21,11 @@ namespace ns3
                               UintegerValue(0),
                               MakeUintegerAccessor(&AtsSchedulerGroup::m_schedulerGroupId),
                               MakeUintegerChecker<uint32_t>())
+                .AddAttribute("PerPriorityRouting",
+                              "Whether the ATS Scheduler Group is configured for per-priority routing (true) or per-stream routing (false).",
+                              BooleanValue(true),
+                              MakeBooleanAccessor(&AtsSchedulerGroup::m_perPriorityRouting),
+                              MakeBooleanChecker())
                 .AddAttribute("MaxResidenceTime", "Maximum residence time inside the scheduler.",
                               TimeValue(MilliSeconds(10)),
                               MakeTimeAccessor(&AtsSchedulerGroup::m_maximumResidenceTime),
@@ -31,12 +37,29 @@ namespace ns3
     {
         NS_LOG_FUNCTION(this);
         m_instanceIdCounter = 0; // Default instance ID is 0
-        // Create default instance with default attributes
-        m_defaultInstance = CreateObject<AtsSchedulerInstance>();
-        m_defaultInstance->SetAttribute("SchedulerIdentifier", UintegerValue(m_instanceIdCounter)); // Default instance has ID 0
-        m_defaultInstance->SetAttribute("SchedulerGroupIdentifier", UintegerValue(m_schedulerGroupId));
-        m_defaultInstance->SetAttribute("CommittedInformationRate", DataRateValue(DataRate("100Mbps")));
-        m_defaultInstance->SetAttribute("CommittedBurstSize", UintegerValue(12288)); // Default to 12KB
+
+        for (uint8_t pcp = 0; pcp < 8; pcp++)
+        {
+            uint32_t instanceId = m_instanceIdCounter++;
+            Ptr<AtsSchedulerInstance> instance = CreateObject<AtsSchedulerInstance>();
+
+            // Configure the instance with default values
+            instance->SetAttribute("SchedulerIdentifier", UintegerValue(instanceId));
+            instance->SetAttribute("SchedulerGroupIdentifier", UintegerValue(m_schedulerGroupId));
+            instance->SetAttribute("CommittedInformationRate", DataRateValue(DataRate("100Mbps")));
+            instance->SetAttribute("CommittedBurstSize", UintegerValue(12288)); // 12 KB
+            instance->SetBucketEmptyTime(m_clock ? m_clock->GetLocalTime() : Seconds(0));
+
+            // Register the instance in the maps
+            m_instanceIdToInstanceMap[instanceId] = instance;
+            m_priorityToInstanceMap[pcp] = instance;
+
+            // Use the instance associated with PCP 0 as the default instance for per-stream routing
+            if (pcp == 0)
+            {
+                m_defaultInstance = instance;
+            }
+        }
     }
 
     AtsSchedulerGroup::~AtsSchedulerGroup()
@@ -45,9 +68,14 @@ namespace ns3
     }
 
     uint32_t
-    AtsSchedulerGroup::CreateAtsInstance(DataRate cir, uint32_t cbs)
+    AtsSchedulerGroup::CreateAtsInstanceForPriority(DataRate cir, uint32_t cbs, uint8_t priority)
     {
-        NS_LOG_FUNCTION(this << cir << cbs);
+        NS_LOG_FUNCTION(this << cir << cbs << priority);
+
+        NS_ASSERT_MSG(priority < 8, "AtsSchedulerGroup: La priorité PCP doit être comprise entre 0 et 7.");
+        NS_ASSERT_MSG(cir.GetBitRate() > 0, "AtsSchedulerGroup: Le Committed Information Rate (CIR) doit être supérieur à 0.");
+        NS_ASSERT_MSG(cbs > 0, "AtsSchedulerGroup: Le Committed Burst Size (CBS) doit être supérieur à 0.");
+
         uint32_t instanceId = m_instanceIdCounter++;
         Ptr<AtsSchedulerInstance> instance = CreateObject<AtsSchedulerInstance>();
         instance->SetAttribute("SchedulerIdentifier", UintegerValue(instanceId));
@@ -56,30 +84,12 @@ namespace ns3
         instance->SetAttribute("CommittedBurstSize", UintegerValue(cbs));
         instance->SetBucketEmptyTime(m_clock ? m_clock->GetLocalTime() : Seconds(0));
         m_instanceIdToInstanceMap[instanceId] = instance;
+        m_priorityToInstanceMap[priority] = instance;
         return instanceId;
     }
 
     bool
-    AtsSchedulerGroup::AssociateInstanceWithStream(uint32_t instanceId, uint32_t streamHandle)
-    {
-        NS_LOG_FUNCTION(this << streamHandle << instanceId);
-        if (m_streamHandlerToInstanceMap.find(streamHandler) != m_streamHandlerToInstanceMap.end())
-        {
-            NS_LOG_WARN("Stream handler " << streamHandler << " already has an associated ATS Scheduler Instance.");
-            return false;
-        }
-        auto instanceIt = m_instanceIdToInstanceMap.find(instanceId);
-        if (instanceIt == m_instanceIdToInstanceMap.end())
-        {
-            NS_LOG_WARN("ATS Scheduler Instance with ID " << instanceId << " does not exist.");
-            return false;
-        }
-        m_streamHandlerToInstanceMap[streamHandler] = instanceIt->second;
-        return true;
-    }
-
-    bool
-    AtsSchedulerGroup::ProcessFrame(Ptr<Packet> packet, uint32_t streamHandle)
+    AtsSchedulerGroup::ProcessFrame(Ptr<Packet> packet, uint32_t streamHandle, Time hardwareLatency)
     {
         NS_ASSERT_MSG(m_clock != nullptr, "AtsScheduler: Clock not configured.");
         Time currentTime = m_clock->GetLocalTime();
@@ -92,12 +102,16 @@ namespace ns3
         packetCopy->RemoveHeader(ethHeader);
         priority = ethHeader.GetPcp();
 
-        // Check if an instance is associated to the stream
+        // Retrieve the instance associated with the priority or the stream
         Ptr<AtsSchedulerInstance> instance = m_defaultInstance;
-        auto it = m_streamHandlerToInstanceMap.find(streamHandle);
-        if (it != m_streamHandlerToInstanceMap.end())
+
+        if (m_perPriorityRouting)
         {
-            instance = it->second;
+            auto it = m_priorityToInstanceMap.find(priority);
+            if (it != m_priorityToInstanceMap.end())
+            {
+                instance = it->second;
+            }
         }
 
         double cir = instance->GetCir().GetBitRate();
@@ -129,6 +143,7 @@ namespace ns3
             packetInfo.priority = priority;
             packetInfo.eligibilityTime = eligibilityTime;
             packetInfo.streamHandle = streamHandle;
+            packetInfo.hardwareLatency = hardwareLatency;
 
             m_calendarQueue.insert(packetInfo);
 
@@ -169,7 +184,7 @@ namespace ns3
             return;
         }
 
-        Time currentTime = m_clock.GetLocalTime();
+        Time currentTime = m_clock->GetLocalTime();
 
         // Retrieve the packet to transmit and erase it from the calendarQueue
         auto it = m_calendarQueue.begin();
@@ -179,7 +194,7 @@ namespace ns3
         // Forward the packet
         if (m_netDevice)
         {
-            m_netDevice->ForwardUp(urgentPacket.packet, m_schedulerGroupId, urgentPacket.priority);
+            m_netDevice->ForwardUp(urgentPacket.packet, urgentPacket.streamHandle, urgentPacket.hardwareLatency);
         }
 
         // Schedule next packet if any

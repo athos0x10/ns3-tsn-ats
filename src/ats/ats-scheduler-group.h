@@ -47,39 +47,33 @@ namespace ns3
          */
         struct AtsPacketInfo
         {
-            Ptr<Packet> packet,
-                uint8_t priority,
-                Time eligibilityTime,
-                uint32_t streamHandle
+            Ptr<Packet> packet;
+            uint8_t priority;
+            Time eligibilityTime;
+            uint32_t streamHandle;
+            Time hardwareLatency;
         };
 
         /**
-         * \brief Create an instance with his specific attributes (cir, cbs).
+         * \brief Create an instance with his specific attributes (cir, cbs) and the priority.
          *
          * \param cir The Committed Information Rate (CIR) for the instance.
          * \param cbs The Committed Burst Size (CBS) for the instance.
+         * \param priority The priority for which the instance is created (used when per-priority routing is enabled).
          * \return The ID of the created instance.
          *
          */
-        uint32_t CreateAtsInstance(DataRate cir, uint32_t cbs);
-
-        /**
-         * \brief Associate an ATS Scheduler Instance with a specific stream handler.
-         *
-         * \param instanceId The ID of the ATS Scheduler Instance to associate.
-         * \param streamHandle The handle of the stream to associate with the instance.
-         * \return True if the association was successful, false otherwise.
-         */
-        bool AssociateInstanceWithStream(uint32_t instanceId, uint32_t streamHandle);
+        uint32_t CreateAtsInstanceForPriority(DataRate cir, uint32_t cbs, uint8_t priority);
 
         /**
          * \brief Compute the eligibility time of a frame and put it in the calendarQueue.
          *
          * \param packet The packet we want to calculate the eligibilityTime.
          * \param streamHandle The handle of the stream.
+         * \param hardwareLatency The hardware latency experienced by the packet.
          * \return True if the packet is valid and has been added to the calendar queue, false if the packet is dropped.
          */
-        bool ProcessFrame(Ptr<Packet> packet, uint32_t streamHandle);
+        bool ProcessFrame(Ptr<Packet> packet, uint32_t streamHandle, Time hardwareLatency);
 
         /**
          * \brief Handle the transmission of a frame when its eligibility time is reached.
@@ -93,17 +87,21 @@ namespace ns3
         void SetGroupEligibilityTime(Time t) { m_groupEligibilityTime = t; }
         void SetClock(Ptr<Clock> c) { m_clock = c; }
         void SetNetDevice(Ptr<TsnNetDevice> d) { m_netDevice = d; }
+        void SetPerPriorityRouting(bool enable) { m_perPriorityRouting = enable; }
 
     private:
         // Identification attribute
         uint32_t m_schedulerGroupId;
         uint32_t m_instanceIdCounter;
 
-        // Map of stream handlers to their associated ATS Scheduler Instances
-        std::map<uint32_t, Ptr<AtsSchedulerInstance>> m_streamHandlerToInstanceMap;
+        // bool to determine if the ATS Scheduler Group is configured for per-priority routing or not
+        bool m_perPriorityRouting; // true by default, false if the ATS Scheduler Group is configured for per-stream routing
+
         // Map of instance IDs to their corresponding ATS Scheduler Instances
         std::map<uint32_t, Ptr<AtsSchedulerInstance>> m_instanceIdToInstanceMap;
-        // Default ATS Scheduler Instance for stream handlers that do not have a specific instance associated
+        // Default Map  of priority to their corresponding ATS Scheduler Instances (used when per-priority routing is enabled)
+        std::map<uint8_t, Ptr<AtsSchedulerInstance>> m_priorityToInstanceMap;
+        // Default instance used when per-stream routing is enabled
         Ptr<AtsSchedulerInstance> m_defaultInstance;
 
         // ATS group attributes values
@@ -139,6 +137,7 @@ namespace ns3
         Ptr<Clock> m_clock;
         // Pointer to the TsnNetDevice to trigger the transmission of the packet when its eligibility time is reached
         Ptr<TsnNetDevice> m_netDevice;
-    }
+    };
 
-}
+} // namespace ns3
+#endif // ATS_SCHEDULER_GROUP_H
