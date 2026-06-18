@@ -139,6 +139,13 @@ namespace ns3
         Time currentTime = (m_ats && m_ats->GetClock()) ? m_ats->GetClock()->GetLocalTime() : Simulator::Now();
         uint32_t sizeBits = packet->GetSize() * 8;
 
+        Time arrivalTime = Simulator::Now();
+        TimestampTag tag;
+        if (packet->FindFirstMatchingByteTag(tag))
+        {
+            arrivalTime = tag.GetTimestamp();
+        }
+
         // Retrieve the priority
         uint8_t priority;
         Ptr<Packet> packetCopy = packet->Copy();
@@ -177,6 +184,8 @@ namespace ns3
             packetInfo.packet = packet;
             packetInfo.priority = priority;
             packetInfo.eligibilityTime = eligibilityTime;
+            packetInfo.hardwareLatency = hardwareLatency;
+            packetInfo.arrivalTime = arrivalTime;
 
             m_calendarQueue.insert(packetInfo);
 
@@ -227,7 +236,7 @@ namespace ns3
         // Forward the packet
         if (m_netDevice)
         {
-            m_netDevice->EnqueueAfterAts(urgentPacket.packet, urgentPacket.priority);
+            m_netDevice->EnqueueAfterAts(urgentPacket.packet, urgentPacket.priority, urgentPacket.hardwareLatency);
         }
 
         // Schedule next packet if any

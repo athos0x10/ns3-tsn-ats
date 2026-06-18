@@ -51,6 +51,8 @@ namespace ns3
             Ptr<Packet> packet;
             uint8_t priority;
             Time eligibilityTime;
+            Time arrivalTime;
+            Time hardwareLatency;
         };
 
         /**
@@ -136,8 +138,8 @@ namespace ns3
                 {
                     return a.eligibilityTime < b.eligibilityTime; // Earlier eligibility time has higher priority.
                 }
-                // If eligibility times are equal, compare the priority values
-                return a.priority > b.priority;
+                // If eligibility times are equal, compare the arrival time
+                return a.arrivalTime < b.arrivalTime;
             }
         };
 
