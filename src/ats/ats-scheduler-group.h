@@ -5,7 +5,6 @@
 #include "ns3/nstime.h"
 #include "ns3/uinteger.h"
 #include "ns3/data-rate.h"
-#include "ns3/clock.h"
 #include "ns3/ats-scheduler-instance.h"
 #include "ns3/tsn-net-device.h"
 #include "ns3/packet.h"
@@ -13,6 +12,8 @@
 
 namespace ns3
 {
+    class Ats;
+
     class AtsSchedulerGroup : public Object
     {
     public:
@@ -50,20 +51,34 @@ namespace ns3
             Ptr<Packet> packet;
             uint8_t priority;
             Time eligibilityTime;
-            uint32_t streamHandle;
-            Time hardwareLatency;
         };
 
         /**
-         * \brief Create an instance with his specific attributes (cir, cbs) and the priority.
+         * \brief Create a generic ATS scheduler instance with specific attributes (cir, cbs).
          *
          * \param cir The Committed Information Rate (CIR) for the instance.
          * \param cbs The Committed Burst Size (CBS) for the instance.
-         * \param priority The priority for which the instance is created (used when per-priority routing is enabled).
-         * \return The ID of the created instance.
-         *
+         * \return The id of the created instance.
          */
-        uint32_t CreateAtsInstanceForPriority(DataRate cir, uint32_t cbs, uint8_t priority);
+        uint32_t CreateAtsInstance(DataRate cir, uint32_t cbs);
+
+        /**
+         * \brief Explicitly bind a stream handle to an existing ATS instance.
+         *
+         * \param streamHandle The unique identifier of the stream.
+         * \param instanceId The id of the ATS instance.
+         * \return True if the binding succeeded, false if the stream was already bound to an instance.
+         */
+        bool BindStreamToInstance(uint32_t streamHandle, uint32_t instanceId);
+
+        /**
+         * \brief Retrieve the ATS instance associated with a stream handle.
+         * If none exists, a dedicated default instance is created for this stream.
+         *
+         * \param streamHandle The unique identifier of the stream.
+         * \return The pointer to the ATS instance mapped to this stream.
+         */
+        Ptr<AtsSchedulerInstance> GetInstanceForStream(uint32_t streamHandle);
 
         /**
          * \brief Compute the eligibility time of a frame and put it in the calendarQueue.
@@ -85,28 +100,27 @@ namespace ns3
         Time GetMaximumResidenceTime() const { return m_maximumResidenceTime; }
         Time GetGroupEligibilityTime() const { return m_groupEligibilityTime; }
         void SetGroupEligibilityTime(Time t) { m_groupEligibilityTime = t; }
-        void SetClock(Ptr<Clock> c) { m_clock = c; }
         void SetNetDevice(Ptr<TsnNetDevice> d) { m_netDevice = d; }
-        void SetPerPriorityRouting(bool enable) { m_perPriorityRouting = enable; }
+        void SetAts(Ptr<Ats> ats) { m_ats = ats; }
 
     private:
         // Identification attribute
         uint32_t m_schedulerGroupId;
         uint32_t m_instanceIdCounter;
 
-        // bool to determine if the ATS Scheduler Group is configured for per-priority routing or not
-        bool m_perPriorityRouting; // true by default, false if the ATS Scheduler Group is configured for per-stream routing
+        // Map linking each instance id with the pointer of the actual instance
+        std::map<uint32_t, Ptr<AtsSchedulerInstance>> m_idToInstanceMap;
 
-        // Map of instance IDs to their corresponding ATS Scheduler Instances
-        std::map<uint32_t, Ptr<AtsSchedulerInstance>> m_instanceIdToInstanceMap;
-        // Default Map  of priority to their corresponding ATS Scheduler Instances (used when per-priority routing is enabled)
-        std::map<uint8_t, Ptr<AtsSchedulerInstance>> m_priorityToInstanceMap;
-        // Default instance used when per-stream routing is enabled
-        Ptr<AtsSchedulerInstance> m_defaultInstance;
+        // Map linking each unique stream handle to its corresponding ATS Scheduler Instance
+        std::map<uint32_t, Ptr<AtsSchedulerInstance>> m_streamToInstanceMap;
 
         // ATS group attributes values
         Time m_groupEligibilityTime;
         Time m_maximumResidenceTime;
+
+        // Default instance parameters used for dynamic per-stream auto-instantiation
+        DataRate m_defaultCir;
+        uint32_t m_defaultCbs;
 
         /**
          * \brief This struct give a comparator for the calendar queue.
@@ -128,15 +142,12 @@ namespace ns3
         };
 
         // Calendar queue to manage packet scheduling based on eligibility time and priority
-        std::multiset<AtsPacketInfo, AtsPacketComparator>
-            m_calendarQueue;
+        std::multiset<AtsPacketInfo, AtsPacketComparator> m_calendarQueue;
         EventId m_nextAtsTransmissionEvent;
         Time m_nextAtsTransmissionTime;
 
-        // Pointer to the local clock of the node
-        Ptr<Clock> m_clock;
-        // Pointer to the TsnNetDevice to trigger the transmission of the packet when its eligibility time is reached
         Ptr<TsnNetDevice> m_netDevice;
+        Ptr<Ats> m_ats;
     };
 
 } // namespace ns3

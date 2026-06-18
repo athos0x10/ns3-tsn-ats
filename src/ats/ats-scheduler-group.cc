@@ -1,7 +1,9 @@
 #include "ats-scheduler-group.h"
 
 #include "ns3/log.h"
+#include "ns3/simulator.h"
 #include "ns3/ethernet-header2.h"
+#include "ns3/ats.h"
 
 namespace ns3
 {
@@ -12,7 +14,7 @@ namespace ns3
     AtsSchedulerGroup::GetTypeId()
     {
         static TypeId tid =
-            TypeId("ns3::AtsScheduler")
+            TypeId("ns3::AtsSchedulerGroup")
                 .SetParent<Object>()
                 .SetGroupName("Tsn")
                 .AddConstructor<AtsSchedulerGroup>()
@@ -21,45 +23,30 @@ namespace ns3
                               UintegerValue(0),
                               MakeUintegerAccessor(&AtsSchedulerGroup::m_schedulerGroupId),
                               MakeUintegerChecker<uint32_t>())
-                .AddAttribute("PerPriorityRouting",
-                              "Whether the ATS Scheduler Group is configured for per-priority routing (true) or per-stream routing (false).",
-                              BooleanValue(true),
-                              MakeBooleanAccessor(&AtsSchedulerGroup::m_perPriorityRouting),
-                              MakeBooleanChecker())
-                .AddAttribute("MaxResidenceTime", "Maximum residence time inside the scheduler.",
+                .AddAttribute("MaxResidenceTime",
+                              "Maximum residence time inside the scheduler.",
                               TimeValue(MilliSeconds(10)),
                               MakeTimeAccessor(&AtsSchedulerGroup::m_maximumResidenceTime),
-                              MakeTimeChecker());
+                              MakeTimeChecker())
+                .AddAttribute("DefaultCir",
+                              "The default Committed Information Rate (CIR) for dynamic instance creation.",
+                              DataRateValue(DataRate("10Mbps")),
+                              MakeDataRateAccessor(&AtsSchedulerGroup::m_defaultCir),
+                              MakeDataRateChecker())
+                .AddAttribute("DefaultCbs",
+                              "The default Committed Burst Size (CBS) in bits for dynamic instance creation.",
+                              UintegerValue(16384), // Default to 2048 bytes (16384 bits)
+                              MakeUintegerAccessor(&AtsSchedulerGroup::m_defaultCbs),
+                              MakeUintegerChecker<uint32_t>());
         return tid;
     }
 
     AtsSchedulerGroup::AtsSchedulerGroup()
     {
         NS_LOG_FUNCTION(this);
-        m_instanceIdCounter = 0; // Default instance ID is 0
-
-        for (uint8_t pcp = 0; pcp < 8; pcp++)
-        {
-            uint32_t instanceId = m_instanceIdCounter++;
-            Ptr<AtsSchedulerInstance> instance = CreateObject<AtsSchedulerInstance>();
-
-            // Configure the instance with default values
-            instance->SetAttribute("SchedulerIdentifier", UintegerValue(instanceId));
-            instance->SetAttribute("SchedulerGroupIdentifier", UintegerValue(m_schedulerGroupId));
-            instance->SetAttribute("CommittedInformationRate", DataRateValue(DataRate("100Mbps")));
-            instance->SetAttribute("CommittedBurstSize", UintegerValue(12288)); // 12 KB
-            instance->SetBucketEmptyTime(m_clock ? m_clock->GetLocalTime() : Seconds(0));
-
-            // Register the instance in the maps
-            m_instanceIdToInstanceMap[instanceId] = instance;
-            m_priorityToInstanceMap[pcp] = instance;
-
-            // Use the instance associated with PCP 0 as the default instance for per-stream routing
-            if (pcp == 0)
-            {
-                m_defaultInstance = instance;
-            }
-        }
+        m_instanceIdCounter = 0;
+        m_groupEligibilityTime = Seconds(0);
+        m_nextAtsTransmissionTime = Seconds(0);
     }
 
     AtsSchedulerGroup::~AtsSchedulerGroup()
@@ -68,31 +55,88 @@ namespace ns3
     }
 
     uint32_t
-    AtsSchedulerGroup::CreateAtsInstanceForPriority(DataRate cir, uint32_t cbs, uint8_t priority)
+    AtsSchedulerGroup::CreateAtsInstance(DataRate cir, uint32_t cbs)
     {
-        NS_LOG_FUNCTION(this << cir << cbs << priority);
+        NS_LOG_FUNCTION(this << cir << cbs);
 
-        NS_ASSERT_MSG(priority < 8, "AtsSchedulerGroup: La priorité PCP doit être comprise entre 0 et 7.");
-        NS_ASSERT_MSG(cir.GetBitRate() > 0, "AtsSchedulerGroup: Le Committed Information Rate (CIR) doit être supérieur à 0.");
-        NS_ASSERT_MSG(cbs > 0, "AtsSchedulerGroup: Le Committed Burst Size (CBS) doit être supérieur à 0.");
+        NS_ASSERT_MSG(cir.GetBitRate() > 0, "AtsSchedulerGroup: The Committed Information Rate (CIR) must be greater than 0.");
+        NS_ASSERT_MSG(cbs > 0, "AtsSchedulerGroup: The Committed Burst Size (CBS) must be greater than 0.");
 
         uint32_t instanceId = m_instanceIdCounter++;
         Ptr<AtsSchedulerInstance> instance = CreateObject<AtsSchedulerInstance>();
+
         instance->SetAttribute("SchedulerIdentifier", UintegerValue(instanceId));
         instance->SetAttribute("SchedulerGroupIdentifier", UintegerValue(m_schedulerGroupId));
         instance->SetAttribute("CommittedInformationRate", DataRateValue(cir));
         instance->SetAttribute("CommittedBurstSize", UintegerValue(cbs));
-        instance->SetBucketEmptyTime(m_clock ? m_clock->GetLocalTime() : Seconds(0));
-        m_instanceIdToInstanceMap[instanceId] = instance;
-        m_priorityToInstanceMap[priority] = instance;
+
+        // Set initial bucket empty time to current clock time or fallback to 0
+        Time currentTime = m_ats->GetClock() ? m_ats->GetClock()->GetLocalTime() : Seconds(0);
+        instance->SetBucketEmptyTime(currentTime);
+
+        // Store the instance in our ID-to-Instance mapping
+        m_idToInstanceMap[instanceId] = instance;
         return instanceId;
+    }
+
+    bool
+    AtsSchedulerGroup::BindStreamToInstance(uint32_t streamHandle, uint32_t instanceId)
+    {
+        NS_LOG_FUNCTION(this << streamHandle << instanceId);
+
+        // Check if the requested ATS instance actually exists in this group
+        auto itInstance = m_idToInstanceMap.find(instanceId);
+        if (itInstance == m_idToInstanceMap.end())
+        {
+            NS_LOG_ERROR("AtsSchedulerGroup: ATS Instance ID " << instanceId << " does not exist in this group.");
+            return false;
+        }
+
+        // Check if the stream was already bound somewhere else
+        auto itStream = m_streamToInstanceMap.find(streamHandle);
+        if (itStream != m_streamToInstanceMap.end())
+        {
+            NS_LOG_INFO("AtsSchedulerGroup: Stream " << streamHandle
+                                                     << " is already bound. Moving it to the new Instance ID " << instanceId);
+        }
+
+        // Bind (or overwrite) the stream to the existing instance pointer
+        m_streamToInstanceMap[streamHandle] = itInstance->second;
+
+        return true;
+    }
+
+    Ptr<AtsSchedulerInstance>
+    AtsSchedulerGroup::GetInstanceForStream(uint32_t streamHandle)
+    {
+        NS_LOG_FUNCTION(this << streamHandle);
+
+        auto it = m_streamToInstanceMap.find(streamHandle);
+        if (it != m_streamToInstanceMap.end())
+        {
+            return it->second;
+        }
+
+        // If no mapping exists, auto-instanciate a dedicated ATS instance
+        NS_LOG_INFO("AtsSchedulerGroup: No explicit instance found for Stream " << streamHandle
+                                                                                << ". Creating a dynamic default instance.");
+
+        // Create the new instance using default group values
+        uint32_t dynamicInstanceId = CreateAtsInstance(m_defaultCir, m_defaultCbs);
+
+        // Retrieve the newly created pointer from our instance map
+        Ptr<AtsSchedulerInstance> dynamicInstance = m_idToInstanceMap[dynamicInstanceId];
+
+        // Bind this stream handle to the newly created instance permanently
+        m_streamToInstanceMap[streamHandle] = dynamicInstance;
+
+        return dynamicInstance;
     }
 
     bool
     AtsSchedulerGroup::ProcessFrame(Ptr<Packet> packet, uint32_t streamHandle, Time hardwareLatency)
     {
-        NS_ASSERT_MSG(m_clock != nullptr, "AtsScheduler: Clock not configured.");
-        Time currentTime = m_clock->GetLocalTime();
+        Time currentTime = (m_ats && m_ats->GetClock()) ? m_ats->GetClock()->GetLocalTime() : Simulator::Now();
         uint32_t sizeBits = packet->GetSize() * 8;
 
         // Retrieve the priority
@@ -102,17 +146,8 @@ namespace ns3
         packetCopy->RemoveHeader(ethHeader);
         priority = ethHeader.GetPcp();
 
-        // Retrieve the instance associated with the priority or the stream
-        Ptr<AtsSchedulerInstance> instance = m_defaultInstance;
-
-        if (m_perPriorityRouting)
-        {
-            auto it = m_priorityToInstanceMap.find(priority);
-            if (it != m_priorityToInstanceMap.end())
-            {
-                instance = it->second;
-            }
-        }
+        // Retrieve the instance associated with the stream
+        Ptr<AtsSchedulerInstance> instance = GetInstanceForStream(streamHandle);
 
         double cir = instance->GetCir().GetBitRate();
         uint32_t cbs = instance->GetCbs();
@@ -142,8 +177,6 @@ namespace ns3
             packetInfo.packet = packet;
             packetInfo.priority = priority;
             packetInfo.eligibilityTime = eligibilityTime;
-            packetInfo.streamHandle = streamHandle;
-            packetInfo.hardwareLatency = hardwareLatency;
 
             m_calendarQueue.insert(packetInfo);
 
@@ -184,7 +217,7 @@ namespace ns3
             return;
         }
 
-        Time currentTime = m_clock->GetLocalTime();
+        Time currentTime = (m_ats && m_ats->GetClock()) ? m_ats->GetClock()->GetLocalTime() : Simulator::Now();
 
         // Retrieve the packet to transmit and erase it from the calendarQueue
         auto it = m_calendarQueue.begin();
@@ -194,7 +227,7 @@ namespace ns3
         // Forward the packet
         if (m_netDevice)
         {
-            m_netDevice->ForwardUp(urgentPacket.packet, urgentPacket.streamHandle, urgentPacket.hardwareLatency);
+            m_netDevice->EnqueueAfterAts(urgentPacket.packet, urgentPacket.priority);
         }
 
         // Schedule next packet if any
@@ -209,4 +242,4 @@ namespace ns3
             m_nextAtsTransmissionTime = currentTime + delay;
         }
     }
-}
+} // namespace ns3
