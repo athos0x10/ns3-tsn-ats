@@ -40,6 +40,9 @@ namespace ns3
         Time GetBucketEmptyTime() const { return m_bucketEmptyTime; }
         void SetBucketEmptyTime(Time t) { m_bucketEmptyTime = t; }
 
+        uint32_t GetSchedulerIdentifier() const { return m_schedulerIdentifier; }
+        uint32_t GetSchedulerGroupIdentifier() const { return m_schedulerGroupIdentifier; }
+
     private:
         // Identification attributes
         uint32_t m_schedulerIdentifier;
