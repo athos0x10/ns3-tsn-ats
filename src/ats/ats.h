@@ -62,13 +62,26 @@ namespace ns3
                           uint8_t priority, Ptr<TsnNetDevice> outputDevice,
                           Time hardwareLatency);
 
+        /**
+         * \brief Retrieve or dynamically create an AtsSchedulerGroup.
+         * Useful for both internal routing and user-space configuration.
+         *
+         * \param key The triplet identifier key.
+         * \param outputDevice Egress device to bind if a new group is created.
+         * \return Pointer to the existing or newly created scheduler group.
+         */
+        Ptr<AtsSchedulerGroup> GetGroup(const AtsGroupKey &key, Ptr<TsnNetDevice> outputDevice = nullptr);
+
     private:
-        // Structure of unique key to identifie an AtsSchedulerGroup
+        /**
+         * \brief Structure of unique key to identify an AtsSchedulerGroup.
+         * Maps BOTH bridge aggregation triplets and per-stream end-station groups.
+         */
         struct AtsGroupKey
         {
             uint32_t inputPortId;
             uint32_t outputPortId;
-            uint8_t priority;
+            uint32_t internalId;
 
             bool operator<(const AtsGroupKey &other) const
             {
@@ -76,12 +89,15 @@ namespace ns3
                     return inputPortId < other.inputPortId;
                 if (outputPortId != other.outputPortId)
                     return outputPortId < other.outputPortId;
-                return priority < other.priority;
+                return internalId < other.internalId;
             }
         };
 
         // Map which contains each ATS group active in this ATS
         std::map<AtsGroupKey, Ptr<AtsSchedulerGroup>> m_groupsMap;
+
+        // Pointer to the local clock
+        Ptr<Clock> m_clock;
     };
 } // namespace ns3
 #endif // ATS_H

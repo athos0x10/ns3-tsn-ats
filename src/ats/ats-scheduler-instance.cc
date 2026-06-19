@@ -42,6 +42,7 @@ namespace ns3
     AtsSchedulerInstance::AtsSchedulerInstance()
     {
         NS_LOG_FUNCTION(this);
+        m_bucketEmptyTime = Seconds(0);
     }
 
     AtsSchedulerInstance::~AtsSchedulerInstance()

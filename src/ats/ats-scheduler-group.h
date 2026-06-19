@@ -131,7 +131,7 @@ namespace ns3
          */
         struct AtsPacketComparator
         {
-            bool operator()(const AtsPacketInfo a, const AtsPacketInfo b) const
+            bool operator()(const AtsPacketInfo &a, const AtsPacketInfo &b) const
             {
                 // First compare the eligibility times
                 if (a.eligibilityTime != b.eligibilityTime)

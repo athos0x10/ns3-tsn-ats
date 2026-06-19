@@ -14,6 +14,8 @@ namespace ns3
         static TypeId GetTypeId(void);
         virtual TypeId GetInstanceTypeId(void) const override;
 
+        InputPortTag() : m_inputPortId(0) {}
+
         virtual uint32_t GetSerializedSize(void) const override { return 4; }
         virtual void Serialize(TagBuffer i) const override { i.WriteU32(m_inputPortId); }
         virtual void Deserialize(TagBuffer i) override { m_inputPortId = i.ReadU32(); }
