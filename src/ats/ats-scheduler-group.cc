@@ -4,6 +4,7 @@
 #include "ns3/simulator.h"
 #include "ns3/ethernet-header2.h"
 #include "ns3/ats.h"
+#include "ns3/timestamp-tag.h"
 
 namespace ns3
 {

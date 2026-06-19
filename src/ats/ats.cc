@@ -30,9 +30,14 @@ namespace ns3
     }
 
     Ptr<AtsSchedulerGroup>
-    Ats::GetGroup(const AtsGroupKey &key, Ptr<TsnNetDevice> outputDevice)
+    Ats::GetGroup(uint32_t inputPortId, uint32_t outputPortId, uint32_t internalId, Ptr<TsnNetDevice> outputDevice)
     {
-        NS_LOG_FUNCTION(this << key.inputPortId << key.outputPortId << key.internalId);
+        NS_LOG_FUNCTION(this << inputPortId << outputPortId << internalId);
+
+        AtsGroupKey key;
+        key.inputPortId = inputPortId;
+        key.outputPortId = outputPortId;
+        key.internalId = internalId;
 
         auto it = m_groupsMap.find(key);
         if (it != m_groupsMap.end())
@@ -59,22 +64,18 @@ namespace ns3
     {
         NS_LOG_FUNCTION(this << packet << streamHandle << inputPortId << outputPortId << (uint32_t)priority);
 
-        AtsGroupKey key;
-        key.inputPortId = inputPortId;
-        key.outputPortId = outputPortId;
+        Ptr<AtsSchedulerGroup> targetGroup;
 
-        if (key.inputPortId == LOCAL_INPUT_PORT)
+        if (inputPortId == LOCAL_INPUT_PORT)
         {
             // End-station (one group for each stream)
-            key.internalId = streamHandle;
+            targetGroup = GetGroup(inputPortId, outputPortId, streamHandle, outputDevice);
         }
         else
         {
             // Bridge
-            key.internalId = priority;
+            targetGroup = GetGroup(inputPortId, outputPortId, priority, outputDevice);
         }
-
-        Ptr<AtsSchedulerGroup> targetGroup = GetGroup(key, outputDevice);
 
         return targetGroup->ProcessFrame(packet, streamHandle, hardwareLatency);
     }

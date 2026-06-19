@@ -4,6 +4,7 @@
 #include "ns3/object.h"
 #include "ns3/ats-scheduler-group.h"
 #include <map>
+#include "ns3/clock.h"
 
 namespace ns3
 {
@@ -66,11 +67,17 @@ namespace ns3
          * \brief Retrieve or dynamically create an AtsSchedulerGroup.
          * Useful for both internal routing and user-space configuration.
          *
-         * \param key The triplet identifier key.
+         * \param inputPortId The interface index of the ingress port, or LOCAL_INPUT_PORT for locally generated traffic.
+         * \param outputPortId The interface index of the egress port.
+         * \param internalId The internal identifier (e.g., priority or stream handle)
          * \param outputDevice Egress device to bind if a new group is created.
          * \return Pointer to the existing or newly created scheduler group.
          */
-        Ptr<AtsSchedulerGroup> GetGroup(const AtsGroupKey &key, Ptr<TsnNetDevice> outputDevice = nullptr);
+        Ptr<AtsSchedulerGroup> GetGroup(uint32_t inputPortId, uint32_t outputPortId, uint32_t internalId, Ptr<TsnNetDevice> outputDevice = nullptr);
+
+        // Getters and Setters
+        Ptr<Clock> GetClock() { return m_clock; }
+        void SetClock(Ptr<Clock> clock) { m_clock = clock; }
 
     private:
         /**
