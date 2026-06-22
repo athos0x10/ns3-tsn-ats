@@ -67,30 +67,30 @@ namespace ns3
         /**
          * \brief Explicitly bind a stream handle to an existing ATS instance.
          *
-         * \param streamHandle The unique identifier of the stream.
+         * \param streamId The unique identifier of the stream.
          * \param instanceId The id of the ATS instance.
          * \return True if the binding succeeded, false if the stream was already bound to an instance.
          */
-        bool BindStreamToInstance(uint32_t streamHandle, uint32_t instanceId);
+        bool BindStreamToInstance(uint32_t streamId, uint32_t instanceId);
 
         /**
          * \brief Retrieve the ATS instance associated with a stream handle.
          * If none exists, a dedicated default instance is created for this stream.
          *
-         * \param streamHandle The unique identifier of the stream.
+         * \param streamId The unique identifier of the stream.
          * \return The pointer to the ATS instance mapped to this stream.
          */
-        Ptr<AtsSchedulerInstance> GetInstanceForStream(uint32_t streamHandle);
+        Ptr<AtsSchedulerInstance> GetInstanceForStream(uint32_t streamId);
 
         /**
          * \brief Compute the eligibility time of a frame and put it in the calendarQueue.
          *
          * \param packet The packet we want to calculate the eligibilityTime.
-         * \param streamHandle The handle of the stream.
+         * \param streamId The identifier of the stream.
          * \param hardwareLatency The hardware latency experienced by the packet.
          * \return True if the packet is valid and has been added to the calendar queue, false if the packet is dropped.
          */
-        bool ProcessFrame(Ptr<Packet> packet, uint32_t streamHandle, Time hardwareLatency);
+        bool ProcessFrame(Ptr<Packet> packet, uint32_t streamId, Time hardwareLatency);
 
         /**
          * \brief Handle the transmission of a frame when its eligibility time is reached.
@@ -113,7 +113,7 @@ namespace ns3
         // Map linking each instance id with the pointer of the actual instance
         std::map<uint32_t, Ptr<AtsSchedulerInstance>> m_idToInstanceMap;
 
-        // Map linking each unique stream handle to its corresponding ATS Scheduler Instance
+        // Map linking each unique stream ID to its corresponding ATS Scheduler Instance
         std::map<uint32_t, Ptr<AtsSchedulerInstance>> m_streamToInstanceMap;
 
         // ATS group attributes values

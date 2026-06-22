@@ -26,7 +26,7 @@ namespace ns3
                               MakeUintegerChecker<uint32_t>())
                 .AddAttribute("MaxResidenceTime",
                               "Maximum residence time inside the scheduler.",
-                              TimeValue(MilliSeconds(10)),
+                              TimeValue(Seconds(1)),
                               MakeTimeAccessor(&AtsSchedulerGroup::m_maximumResidenceTime),
                               MakeTimeChecker())
                 .AddAttribute("DefaultCir",
@@ -81,9 +81,9 @@ namespace ns3
     }
 
     bool
-    AtsSchedulerGroup::BindStreamToInstance(uint32_t streamHandle, uint32_t instanceId)
+    AtsSchedulerGroup::BindStreamToInstance(uint32_t streamId, uint32_t instanceId)
     {
-        NS_LOG_FUNCTION(this << streamHandle << instanceId);
+        NS_LOG_FUNCTION(this << streamId << instanceId);
 
         // Check if the requested ATS instance actually exists in this group
         auto itInstance = m_idToInstanceMap.find(instanceId);
@@ -94,32 +94,32 @@ namespace ns3
         }
 
         // Check if the stream was already bound somewhere else
-        auto itStream = m_streamToInstanceMap.find(streamHandle);
+        auto itStream = m_streamToInstanceMap.find(streamId);
         if (itStream != m_streamToInstanceMap.end())
         {
-            NS_LOG_INFO("AtsSchedulerGroup: Stream " << streamHandle
+            NS_LOG_INFO("AtsSchedulerGroup: Stream " << streamId
                                                      << " is already bound. Moving it to the new Instance ID " << instanceId);
         }
 
         // Bind (or overwrite) the stream to the existing instance pointer
-        m_streamToInstanceMap[streamHandle] = itInstance->second;
+        m_streamToInstanceMap[streamId] = itInstance->second;
 
         return true;
     }
 
     Ptr<AtsSchedulerInstance>
-    AtsSchedulerGroup::GetInstanceForStream(uint32_t streamHandle)
+    AtsSchedulerGroup::GetInstanceForStream(uint32_t streamId)
     {
-        NS_LOG_FUNCTION(this << streamHandle);
+        NS_LOG_FUNCTION(this << streamId);
 
-        auto it = m_streamToInstanceMap.find(streamHandle);
+        auto it = m_streamToInstanceMap.find(streamId);
         if (it != m_streamToInstanceMap.end())
         {
             return it->second;
         }
 
         // If no mapping exists, auto-instanciate a dedicated ATS instance
-        NS_LOG_INFO("AtsSchedulerGroup: No explicit instance found for Stream " << streamHandle
+        NS_LOG_INFO("AtsSchedulerGroup: No explicit instance found for Stream " << streamId
                                                                                 << ". Creating a dynamic default instance.");
 
         // Create the new instance using default group values
@@ -128,14 +128,14 @@ namespace ns3
         // Retrieve the newly created pointer from our instance map
         Ptr<AtsSchedulerInstance> dynamicInstance = m_idToInstanceMap[dynamicInstanceId];
 
-        // Bind this stream handle to the newly created instance permanently
-        m_streamToInstanceMap[streamHandle] = dynamicInstance;
+        // Bind this stream ID to the newly created instance permanently
+        m_streamToInstanceMap[streamId] = dynamicInstance;
 
         return dynamicInstance;
     }
 
     bool
-    AtsSchedulerGroup::ProcessFrame(Ptr<Packet> packet, uint32_t streamHandle, Time hardwareLatency)
+    AtsSchedulerGroup::ProcessFrame(Ptr<Packet> packet, uint32_t streamId, Time hardwareLatency)
     {
         Time currentTime = (m_ats && m_ats->GetClock()) ? m_ats->GetClock()->GetLocalTime() : Simulator::Now();
         uint32_t sizeBits = packet->GetSize() * 8;
@@ -155,7 +155,7 @@ namespace ns3
         priority = ethHeader.GetPcp();
 
         // Retrieve the instance associated with the stream
-        Ptr<AtsSchedulerInstance> instance = GetInstanceForStream(streamHandle);
+        Ptr<AtsSchedulerInstance> instance = GetInstanceForStream(streamId);
 
         double cir = instance->GetCir().GetBitRate();
         uint32_t cbs = instance->GetCbs();
@@ -172,9 +172,24 @@ namespace ns3
         Time bucketFullTime = instance->GetBucketEmptyTime() + emptyToFullDuration;
 
         Time eligibilityTime = Max(currentTime, Max(m_groupEligibilityTime, schedulerEligibilityTime));
+        Time residenceDelay = eligibilityTime - arrivalTime;
+
+        // --- ATS DEBUG LOGS ---
+        NS_LOG_DEBUG("[ATS-DEBUG] Packet UID: " << packet->GetUid()
+                                                << " | Size: " << packet->GetSize() << " Bytes (" << sizeBits << " bits)"
+                                                << " | Arrival: " << arrivalTime.As(Time::S)
+                                                << " | CurrentTime: " << currentTime.As(Time::S));
+        NS_LOG_DEBUG("[ATS-DEBUG] LengthRecovery: " << lengthRecoveryDuration.As(Time::S)
+                                                    << " | BucketEmptyTime Before: " << instance->GetBucketEmptyTime().As(Time::S)
+                                                    << " | SchedulerEligibilityTime: " << schedulerEligibilityTime.As(Time::S));
+        NS_LOG_DEBUG("[ATS-DEBUG] Evaluated EligibilityTime: " << eligibilityTime.As(Time::S)
+                                                               << " | Residence Delay: " << residenceDelay.As(Time::S)
+                                                               << " | Max Allowed Residence: " << m_maximumResidenceTime.As(Time::S));
+        // -------------------------------
 
         if (eligibilityTime <= (currentTime + m_maximumResidenceTime))
         {
+            NS_LOG_DEBUG("[ATS-DEBUG] Packet " << packet->GetUid() << " -> PASSED (Compliant)");
             // The frame is valid
             m_groupEligibilityTime = eligibilityTime;
             Time newBucketEmptyTime = (eligibilityTime < bucketFullTime) ? schedulerEligibilityTime : (schedulerEligibilityTime + eligibilityTime - bucketFullTime);
@@ -212,7 +227,8 @@ namespace ns3
             }
             return true;
         }
-        NS_LOG_INFO("Packet dropped by ATS Scheduler: eligibility time " << eligibilityTime << " exceeds maximum residence time.");
+        NS_LOG_WARN("[ATS-DEBUG] Packet " << packet->GetUid() << " -> DROPPED (Residence delay "
+                                          << residenceDelay.As(Time::S) << " > " << m_maximumResidenceTime.As(Time::S) << ")");
         return false; // The packet is dropped
     }
 
