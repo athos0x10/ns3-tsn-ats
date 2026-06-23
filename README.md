@@ -35,3 +35,5 @@ Since this project is not integrated in the eden-sim project (yet) you must copy
 |-eden-sim/
 |-ns3-tsn-ats/
 ```
+
+Please make sure to add all the files in the CMakeLists.txt for TSN and traffic-generator.
