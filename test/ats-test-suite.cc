@@ -539,6 +539,147 @@ void AtsNoisyNeighborIsolationTestCase::DoRun()
 }
 
 /**
+ * \ingroup Ats-tests
+ * \brief Test case checking ATS shaper integration inside an intermediate SwitchNetDevice.
+ * * \details This test illustrate this environement:
+ * - 1 Source End-Station, 1 TSN Switch (SW1), 1 Destination End-Station.
+ * - Source sends a high-rate back-to-back burst of 3 frames.
+ * - SW1 looks up its L2 forwarding table and switches the packets to the egress port.
+ * - Egress port applies ATS shaping (CIR = 10 Mbps).
+ * - Target asserts that spacing matches exactly the required LengthRecovery delay.
+ */
+class AtsBridgeTransitTestCase : public TestCase
+{
+public:
+    AtsBridgeTransitTestCase();
+    virtual ~AtsBridgeTransitTestCase() {}
+
+private:
+    void DoRun() override;
+    void RecordRxTime(Ptr<const Packet> p);
+
+    std::vector<Time> m_rxTimes;
+};
+
+AtsBridgeTransitTestCase::AtsBridgeTransitTestCase()
+    : TestCase("Verify that an ATS shaper embedded inside a SwitchNetDevice port reshapes transient bursty flows") {}
+
+void AtsBridgeTransitTestCase::RecordRxTime(Ptr<const Packet> p)
+{
+    m_rxTimes.push_back(Simulator::Now());
+}
+
+void AtsBridgeTransitTestCase::DoRun()
+{
+    m_rxTimes.clear();
+
+    // Instantiate nodes
+    Ptr<TsnNode> nSource = CreateObject<TsnNode>();
+    Ptr<TsnNode> nDest = CreateObject<TsnNode>();
+    Ptr<TsnNode> nSw1 = CreateObject<TsnNode>();
+
+    // Instantiate clocks
+    Ptr<Clock> clockSource = CreateObject<Clock>();
+    Ptr<Clock> clockSw1 = CreateObject<Clock>();
+    Ptr<Clock> clockDest = CreateObject<Clock>();
+    nSource->SetMainClock(clockSource);
+    nSw1->SetMainClock(clockSw1);
+    nDest->SetMainClock(clockDest);
+
+    // Instantiate TSN interfaces
+    Ptr<TsnNetDevice> netSource = CreateObject<TsnNetDevice>();
+    nSource->AddDevice(netSource);
+    Ptr<TsnNetDevice> netDest = CreateObject<TsnNetDevice>();
+    nDest->AddDevice(netDest);
+
+    // Switch NetDevices (Port 1 Ingress, Port 2 Egress)
+    Ptr<TsnNetDevice> netSw1_1 = CreateObject<TsnNetDevice>();
+    nSw1->AddDevice(netSw1_1);
+    Ptr<TsnNetDevice> netSw1_2 = CreateObject<TsnNetDevice>();
+    nSw1->AddDevice(netSw1_2);
+
+    // Operational Line-rate (1 Gbps)
+    netSource->SetAttribute("DataRate", DataRateValue(DataRate("1Gbps")));
+    netSw1_1->SetAttribute("DataRate", DataRateValue(DataRate("1Gbps")));
+    netSw1_2->SetAttribute("DataRate", DataRateValue(DataRate("1Gbps")));
+    netDest->SetAttribute("DataRate", DataRateValue(DataRate("1Gbps")));
+
+    // Cable links configuration via EthernetChannel
+    Ptr<EthernetChannel> chA = CreateObject<EthernetChannel>();
+    netSource->Attach(chA);
+    netSw1_1->Attach(chA);
+
+    Ptr<EthernetChannel> chB = CreateObject<EthernetChannel>();
+    netSw1_2->Attach(chB);
+    netDest->Attach(chB);
+
+    // Instantiate Layer-2 Infrastructure inside SW1
+    Ptr<SwitchNetDevice> sw1 = CreateObject<SwitchNetDevice>();
+    sw1->SetAttribute("MinForwardingLatency", TimeValue(MicroSeconds(10)));
+    sw1->SetAttribute("MaxForwardingLatency", TimeValue(MicroSeconds(10)));
+    nSw1->AddDevice(sw1);
+    sw1->AddSwitchPort(netSw1_1);
+    sw1->AddSwitchPort(netSw1_2);
+
+    netSource->SetAddress(Mac48Address::Allocate());
+    netDest->SetAddress(Mac48Address::Allocate());
+    sw1->SetAddress(Mac48Address::Allocate());
+
+    // Allocating CoS Queues
+    for (int i = 0; i < 8; i++)
+    {
+        netSource->SetQueue(CreateObject<DropTailQueue<Packet>>());
+        netDest->SetQueue(CreateObject<DropTailQueue<Packet>>());
+        netSw1_1->SetQueue(CreateObject<DropTailQueue<Packet>>());
+        netSw1_2->SetQueue(CreateObject<DropTailQueue<Packet>>());
+    }
+
+    // Set Bridging Rule for VLAN 100
+    sw1->AddForwardingTableEntry(Mac48Address("ff:ff:ff:ff:ff:ff"), 100, {netSw1_2});
+
+    // Configure ATS Engine on Switch Egress Port
+    netSw1_2->SetAttribute("isAtsEnabled", BooleanValue(true));
+    Ptr<Ats> atsEngine = netSw1_2->GetAts();
+    NS_TEST_ASSERT_MSG_NE(atsEngine, nullptr, "ATS Engine must be successfully instantiated on SW port 2");
+    atsEngine->SetClock(clockSw1);
+    atsEngine->SetAttribute("MaxResidenceTime", TimeValue(MilliSeconds(5)));
+
+    // Connect metrics capture trace
+    netDest->TraceConnectWithoutContext("MacRx", MakeCallback(&AtsBridgeTransitTestCase::RecordRxTime, this));
+
+    // Dense Burst Traffic Generator Profile
+    Ptr<EthernetGenerator> app0 = CreateObject<EthernetGenerator>();
+    app0->Setup(netSource);
+    app0->SetAttribute("BurstSize", UintegerValue(1));         // 3 packets burst
+    app0->SetAttribute("PayloadSize", UintegerValue(1400));    // Large frame payload
+    app0->SetAttribute("Period", TimeValue(MicroSeconds(10))); // Microsecond arrival separation
+    app0->SetAttribute("PCP", UintegerValue(1));
+    app0->SetAttribute("VlanID", UintegerValue(100));
+    nSource->AddApplication(app0);
+    app0->SetStartTime(MilliSeconds(0));
+    app0->SetStopTime(MilliSeconds(0) + MicroSeconds(25));
+
+    // Execution environment lifecycle
+    Simulator::Stop(MilliSeconds(20));
+    Simulator::Run();
+    Simulator::Destroy();
+
+    // Verification Layer
+    NS_TEST_ASSERT_MSG_EQ(m_rxTimes.size(), 3, "Bridge Transit Failure: Not all frames emerged from the switch node.");
+
+    // Validate precision of Inter-packet Spacing (LengthRecovery = 1422 bytes @ 10Mbps = ~1137.6 us)
+    double deltaP0_P1 = (m_rxTimes[1] - m_rxTimes[0]).GetMicroSeconds();
+    double deltaP1_P2 = (m_rxTimes[2] - m_rxTimes[1]).GetMicroSeconds();
+    double expectedSpacingUs = 1137.6;
+    double toleranceUs = 1.0;
+
+    NS_TEST_ASSERT_MSG_EQ_TOL(deltaP0_P1, expectedSpacingUs, toleranceUs,
+                              "Transit ATS precision fault on P0->P1 gap. Measured: " << deltaP0_P1);
+    NS_TEST_ASSERT_MSG_EQ_TOL(deltaP1_P2, expectedSpacingUs, toleranceUs,
+                              "Transit ATS precision fault on P1->P2 gap. Measured: " << deltaP1_P2);
+}
+
+/**
  * \ingroup ats-tests
  * \brief Main TestSuite registration class for the ATS module
  */
@@ -597,6 +738,11 @@ AtsTestSuite::AtsTestSuite()
     // Test Case 5 : Stream Segregation / Noisy Neighbor Protection (t=0ms)
     // -------------------------------------------------------------------------
     AddTestCase(new AtsNoisyNeighborIsolationTestCase(), TestCase::QUICK);
+
+    // -------------------------------------------------------------------------
+    // Test Case 6 : SwitchNetDevice Transit & L2 Forwarding Reshaping Check
+    // -------------------------------------------------------------------------
+    AddTestCase(new AtsBridgeTransitTestCase(), TestCase::QUICK);
 }
 
 static AtsTestSuite m_atsTestSuite;
