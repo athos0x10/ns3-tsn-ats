@@ -9,19 +9,29 @@ This project was part of my internship in the **Electronic Systems group at Eind
 ## Key Implementation Objectives
 
 * Implement the Asynchronous Traffic Shaping (ATS) logic.
-* Evaluate end-to-end latency and jitter compared to non-shaping environments and others TSN shapers.
+* Generator of networks for ns3 specifically for **TSN** architecture.
 
 ## Repository Structure
 
-* */src*: C++ source code for the ATS scheduler.
-* */scratch*: Simulation scenarios and test scripts.
+* */src*: C++ source code for the ATS scheduler (and Stream-gate but not tested).
+* */scratch*: Simulation scenarios.
 * */test*: Tests source code.
 * */docs*: Technical notes, references to the 802.1Qcr standard.
-
----
+* */debug*: Simulation scenarios for debug.
 
 ## Prerequisites & Installation
 
 > [!IMPORTANT]
 > To run this project successfully, **eden-sim** and **ns-3.40** must be installed on your system.
 > If you prefer a turnkey, containerized environment to avoid operating system issues, a fully guided solution to containerize the entire setup using Docker is available in ns3-setup.md.
+
+## Deployment
+
+Since this project is not integrated in the eden-sim project (yet) you must copy all the files you need in the eden-sim repository. For this you can use the *deploy.sh* script in order to copy all the files you'll need and also configure and build ns3. Be careful, it will work only if you have the same folder architecture as follow:
+
+```text
+/
+|-ns-allinone-3.40/
+|-eden-sim/
+|-ns3-tsn-ats/
+```
