@@ -32,8 +32,8 @@
  * |  |  | Pkt 0 -> Delay: 414.4 us  (<= 1ms) -------------------> [ALLOW]   |  |  |
  * |  |  | Pkt 1 -> Delay: 828.8 us  (<= 1ms) -------------------> [ALLOW]   |  |  |
  * |  |  | Pkt 2 -> Delay: 1243.2 us (> 1ms)  --[MaxResidence]--> [DROP!]    |  |  |
- * |  |  | Pkt 3 -> Delay: 1657.6 us (> 1ms)  --[MaxResidence]--> [DROP!]    |  |  |
- * |  |  | Pkt 4 -> Delay: 2072.0 us (> 1ms)  --[MaxResidence]--> [DROP!]    |  |  |
+ * |  |  | Pkt 3 -> Delay: 1243.2 us (> 1ms)  --[MaxResidence]--> [DROP!]    |  |  |
+ * |  |  | Pkt 4 -> Delay: 2243.2 us (> 1ms)  --[MaxResidence]--> [DROP!]    |  |  |
  * |  |  +-------------------------------------------------------------------+  |  |
  * |  |                                                                         |  |
  * |  |    +-------------------------------------------------------+            |  |
@@ -77,7 +77,6 @@ int main(int argc, char *argv[])
     n0->setActiveClock(0);
     n1->setActiveClock(0);
 
-    // High line-rate NetDevice configuration to isolate shaping latency from transmission limits
     Ptr<TsnNetDevice> net0 = CreateObject<TsnNetDevice>();
     n0->AddDevice(net0);
     Ptr<TsnNetDevice> net1 = CreateObject<TsnNetDevice>();
@@ -93,14 +92,12 @@ int main(int argc, char *argv[])
     net0->SetAddress(Mac48Address::Allocate());
     net1->SetAddress(Mac48Address::Allocate());
 
-    // Mandatory 8-queue structure initialization for TSN scheduling
     for (int i = 0; i < 8; i++)
     {
         net0->SetQueue(CreateObject<DropTailQueue<Packet>>());
         net1->SetQueue(CreateObject<DropTailQueue<Packet>>());
     }
 
-    // Activation and Configuration of the ATS Core Engine
     net0->SetAttribute("isAtsEnabled", BooleanValue(true));
     Ptr<Ats> ats = net0->GetAts();
     ats->SetClock(clock0);

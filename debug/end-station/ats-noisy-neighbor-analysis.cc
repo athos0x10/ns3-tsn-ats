@@ -89,9 +89,7 @@ int main(int argc, char *argv[])
 
     net1->TraceConnectWithoutContext("MacRx", MakeCallback(&RecordRxTraffic));
 
-    // -------------------------------------------------------------------------
     // APPLICATION 1: Stream 10 - The Noisy Neighbor (Payload = 500 -> Total Size = 522)
-    // -------------------------------------------------------------------------
     Ptr<EthernetGenerator> appMalicious = CreateObject<EthernetGenerator>();
     appMalicious->Setup(net0);
     appMalicious->SetAttribute("StreamId", UintegerValue(10));
@@ -102,9 +100,7 @@ int main(int argc, char *argv[])
     appMalicious->SetAttribute("PCP", UintegerValue(5));
     n0->AddApplication(appMalicious);
 
-    // -------------------------------------------------------------------------
     // APPLICATION 2: Stream 20 - The Compliant Flow (Payload = 300 -> Total Size = 322)
-    // -------------------------------------------------------------------------
     Ptr<EthernetGenerator> appCompliant = CreateObject<EthernetGenerator>();
     appCompliant->Setup(net0);
     appCompliant->SetAttribute("StreamId", UintegerValue(20));
