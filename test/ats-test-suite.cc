@@ -219,8 +219,8 @@ void AtsPolicingDropTestCase::DoRun()
     n0->AddApplication(app0);
 
     // Immediate operational window cutoff to enforce only one burst event execution
-    app0->SetStartTime(MilliSeconds(10));
-    app0->SetStopTime(MilliSeconds(10) + MicroSeconds(2));
+    app0->SetStartTime(MilliSeconds(0));
+    app0->SetStopTime(MilliSeconds(0) + MicroSeconds(2));
 
     net1->TraceConnectWithoutContext("MacRx", MakeCallback(&AtsPolicingDropTestCase::ReceiveRx, this));
 
@@ -405,8 +405,8 @@ void AtsShapingLatencyTestCase::DoRun()
     app->SetAttribute("Period", TimeValue(Seconds(1)));
 
     n0->AddApplication(app);
-    app->SetStartTime(MilliSeconds(20));
-    app->SetStopTime(MilliSeconds(25));
+    app->SetStartTime(MilliSeconds(0));
+    app->SetStopTime(MilliSeconds(5));
 
     Simulator::Stop(MilliSeconds(100));
     Simulator::Run();
@@ -416,12 +416,126 @@ void AtsShapingLatencyTestCase::DoRun()
 
     Time deltaReceived = m_rxTimes[1] - m_rxTimes[0];
     double deltaUs = deltaReceived.GetMicroSeconds();
-
+    // It is different than the drop test because we removed VlanId so the packet size is 518 bytes
     double expectedSpacingUs = 414.4;
     double toleranceUs = 0.5;
 
     NS_TEST_ASSERT_MSG_EQ_TOL(deltaUs, expectedSpacingUs, toleranceUs,
                               "ATS spacing delay drifts outside allowable bounds! " << "Measured: " << deltaUs << " us, Expected: " << expectedSpacingUs << " us");
+}
+
+/**
+ * \ingroup Ats-tests
+ * \brief Test case checking strict Stream ID isolation against a malicious stream at t=0ms.
+ */
+class AtsNoisyNeighborIsolationTestCase : public TestCase
+{
+public:
+    AtsNoisyNeighborIsolationTestCase();
+    virtual ~AtsNoisyNeighborIsolationTestCase() {}
+
+private:
+    void DoRun() override;
+    void ReceiveRx(Ptr<const Packet> p);
+
+    uint32_t m_stream10Count{0};
+    uint32_t m_stream20Count{0};
+};
+
+AtsNoisyNeighborIsolationTestCase::AtsNoisyNeighborIsolationTestCase()
+    : TestCase("Verify that a non-compliant malicious burst on Stream 10 does not cause drop propagation on compliant Stream 20") {}
+
+void AtsNoisyNeighborIsolationTestCase::ReceiveRx(Ptr<const Packet> p)
+{
+    // Differentiate incoming streams via payload sizing profiles safely without header dependencies
+    if (p->GetSize() == 522)
+    {
+        m_stream10Count++;
+    }
+    else if (p->GetSize() == 322)
+    {
+        m_stream20Count++;
+    }
+}
+
+void AtsNoisyNeighborIsolationTestCase::DoRun()
+{
+    m_stream10Count = 0;
+    m_stream20Count = 0;
+
+    Ptr<TsnNode> n0 = CreateObject<TsnNode>();
+    Ptr<TsnNode> n1 = CreateObject<TsnNode>();
+
+    Ptr<Clock> clock0 = CreateObject<Clock>();
+    Ptr<Clock> clock1 = CreateObject<Clock>();
+    n0->SetMainClock(clock0);
+    n1->SetMainClock(clock1);
+
+    Ptr<TsnNetDevice> net0 = CreateObject<TsnNetDevice>();
+    n0->AddDevice(net0);
+    Ptr<TsnNetDevice> net1 = CreateObject<TsnNetDevice>();
+    n1->AddDevice(net1);
+
+    net0->SetAttribute("DataRate", DataRateValue(DataRate("1Gbps")));
+    net1->SetAttribute("DataRate", DataRateValue(DataRate("1Gbps")));
+
+    Ptr<EthernetChannel> channel = CreateObject<EthernetChannel>();
+    net0->Attach(channel);
+    net1->Attach(channel);
+
+    net0->SetAddress(Mac48Address::Allocate());
+    net1->SetAddress(Mac48Address::Allocate());
+
+    for (int i = 0; i < 8; i++)
+    {
+        net0->SetQueue(CreateObject<DropTailQueue<Packet>>());
+        net1->SetQueue(CreateObject<DropTailQueue<Packet>>());
+    }
+
+    net0->SetAttribute("isAtsEnabled", BooleanValue(true));
+    Ptr<Ats> ats = net0->GetAts();
+    ats->SetClock(clock0);
+    ats->SetAttribute("MaxResidenceTime", TimeValue(MilliSeconds(1)));
+
+    net1->TraceConnectWithoutContext("MacRx", MakeCallback(&AtsNoisyNeighborIsolationTestCase::ReceiveRx, this));
+
+    // App 1: Noisy Neighbor (Stream 10) -> Mass burst of 6 packets (causes policing drops)
+    Ptr<EthernetGenerator> appMalicious = CreateObject<EthernetGenerator>();
+    appMalicious->Setup(net0);
+    appMalicious->SetAttribute("StreamId", UintegerValue(10));
+    appMalicious->SetAttribute("BurstSize", UintegerValue(6));
+    appMalicious->SetAttribute("PayloadSize", UintegerValue(500));
+    appMalicious->SetAttribute("Period", TimeValue(MicroSeconds(10)));
+    appMalicious->SetAttribute("VlanID", UintegerValue(1));
+    appMalicious->SetAttribute("PCP", UintegerValue(5));
+    n0->AddApplication(appMalicious);
+
+    // App 2: Compliant Flow (Stream 20) -> Standard burst of 2 packets (must safely pass)
+    Ptr<EthernetGenerator> appCompliant = CreateObject<EthernetGenerator>();
+    appCompliant->Setup(net0);
+    appCompliant->SetAttribute("StreamId", UintegerValue(20));
+    appCompliant->SetAttribute("BurstSize", UintegerValue(2));
+    appCompliant->SetAttribute("PayloadSize", UintegerValue(300));
+    appCompliant->SetAttribute("Period", TimeValue(MicroSeconds(10)));
+    appCompliant->SetAttribute("VlanID", UintegerValue(1));
+    appCompliant->SetAttribute("PCP", UintegerValue(5));
+    n0->AddApplication(appCompliant);
+
+    // Align start execution at t=0ms and restrict lifecycle window to block transmission cycles
+    Time startTime = MilliSeconds(0);
+    appMalicious->SetStartTime(startTime);
+    appMalicious->SetStopTime(startTime + MicroSeconds(5));
+
+    appCompliant->SetStartTime(startTime);
+    appCompliant->SetStopTime(startTime + MicroSeconds(5));
+
+    Simulator::Stop(MilliSeconds(50));
+    Simulator::Run();
+    Simulator::Destroy();
+
+    // Verify that the compliant flow passed without drops, and the noisy flow was policed
+    NS_TEST_ASSERT_MSG_EQ(m_stream10Count, 2, "Noisy Neighbor policing failure: Unexpected throughput on Stream 10");
+    NS_TEST_ASSERT_MSG_EQ(m_stream20Count, 2, "ATS Segregation Failure: Noisy Neighbor induced drops or delay on compliant Stream 20");
 }
 
 /**
@@ -452,12 +566,12 @@ AtsTestSuite::AtsTestSuite()
     // -------------------------------------------------------------------------
     // - ATS Defaults: CIR = 10 Mbps, MaxResidenceTime = 1 ms (1000 µs)
     // - Frame Size: 522 Bytes = 4176 bits -> Processing cost = 417.6 µs per packet
-    // - A burst of 5 packets arrives at t = 10000 µs (0.01 s):
-    //   * Pkt 0: Eligibility = 10417.6 µs -> Delay = 417.6 µs (<= 1ms)  -> ALLOW
-    //   * Pkt 1: Eligibility = 10835.2 µs -> Delay = 835.2 µs (<= 1ms)  -> ALLOW
-    //   * Pkt 2: Eligibility = 11252.8 µs -> Delay = 1252.8 µs (> 1ms) -> DROP
-    //   * Pkt 3: Eligibility = 11252.8 µs -> Delay = 1252.8 µs (> 1ms) -> DROP
-    //   * Pkt 4: Eligibility = 11252.8 µs -> Delay = 1252.8 µs (> 1ms) -> DROP
+    // - A burst of 5 packets arrives at t = 0 µs (0 s):
+    //   * Pkt 0: Eligibility = 417.6 µs -> Delay = 417.6 µs (<= 1ms)  -> ALLOW
+    //   * Pkt 1: Eligibility = 835.2 µs -> Delay = 835.2 µs (<= 1ms)  -> ALLOW
+    //   * Pkt 2: Eligibility = 1252.8 µs -> Delay = 1252.8 µs (> 1ms) -> DROP
+    //   * Pkt 3: Eligibility = 1252.8 µs -> Delay = 1252.8 µs (> 1ms) -> DROP
+    //   * Pkt 4: Eligibility = 1252.8 µs -> Delay = 1252.8 µs (> 1ms) -> DROP
     // - Execution results in exactly 2 packets passing the shaper (Pkt 0 and Pkt 1).
     // -------------------------------------------------------------------------
     uint64_t payloadSizeDrop = 500;
@@ -478,6 +592,11 @@ AtsTestSuite::AtsTestSuite()
     // Test Case 4 : Shaping Latency Precision Check
     // -------------------------------------------------------------------------
     AddTestCase(new AtsShapingLatencyTestCase(), TestCase::QUICK);
+
+    // -------------------------------------------------------------------------
+    // Test Case 5 : Stream Segregation / Noisy Neighbor Protection (t=0ms)
+    // -------------------------------------------------------------------------
+    AddTestCase(new AtsNoisyNeighborIsolationTestCase(), TestCase::QUICK);
 }
 
 static AtsTestSuite m_atsTestSuite;

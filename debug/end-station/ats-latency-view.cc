@@ -148,8 +148,8 @@ int main(int argc, char *argv[])
     app->SetAttribute("Period", TimeValue(Seconds(1)));
 
     srcNode->AddApplication(app);
-    app->SetStartTime(MilliSeconds(20));
-    app->SetStopTime(MilliSeconds(25));
+    app->SetStartTime(MilliSeconds(0));
+    app->SetStopTime(MilliSeconds(5));
 
     // Simulation execution window
     Simulator::Stop(MilliSeconds(100));

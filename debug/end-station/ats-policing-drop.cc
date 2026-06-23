@@ -117,8 +117,8 @@ int main(int argc, char *argv[])
     n0->AddApplication(app0);
 
     // Immediate operational window cutoff to enforce only a single burst event
-    app0->SetStartTime(MilliSeconds(10));
-    app0->SetStopTime(MilliSeconds(10) + MicroSeconds(2));
+    app0->SetStartTime(MilliSeconds(0));
+    app0->SetStopTime(MilliSeconds(0) + MicroSeconds(2));
 
     // Simulation Execution
     NS_LOG_UNCOND("Starting ATS Debug Simulation...");
