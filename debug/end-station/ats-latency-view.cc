@@ -109,13 +109,11 @@ int main(int argc, char *argv[])
     srcNode->SetMainClock(srcClock);
     dstNode->SetMainClock(dstClock);
 
-    // Network interface creation
     Ptr<TsnNetDevice> txDevice = CreateObject<TsnNetDevice>();
     srcNode->AddDevice(txDevice);
     Ptr<TsnNetDevice> rxDevice = CreateObject<TsnNetDevice>();
     dstNode->AddDevice(rxDevice);
 
-    // Channel attachment
     Ptr<EthernetChannel> channel = CreateObject<EthernetChannel>();
     txDevice->Attach(channel);
     rxDevice->Attach(channel);
@@ -123,14 +121,12 @@ int main(int argc, char *argv[])
     txDevice->SetAddress(Mac48Address::Allocate());
     rxDevice->SetAddress(Mac48Address::Allocate());
 
-    // Mandatory 8-queue structure initialization for TSN scheduling
     for (int i = 0; i < 8; i++)
     {
         txDevice->SetQueue(CreateObject<DropTailQueue<Packet>>());
         rxDevice->SetQueue(CreateObject<DropTailQueue<Packet>>());
     }
 
-    // ATS Configuration on transmitter interface
     txDevice->SetAttribute("isAtsEnabled", BooleanValue(true));
     Ptr<Ats> atsEngine = txDevice->GetAts();
     atsEngine->SetClock(srcClock);
@@ -139,7 +135,6 @@ int main(int argc, char *argv[])
     // Hooking the measurement callback onto the destination MAC receive trace
     rxDevice->TraceConnectWithoutContext("MacRx", MakeCallback(&RxTraceCallback));
 
-    // Traffic Generator setup (Single dense burst of 2 back-to-back packets)
     Ptr<EthernetGenerator> app = CreateObject<EthernetGenerator>();
     app->Setup(txDevice);
     app->SetAttribute("StreamId", UintegerValue(10));

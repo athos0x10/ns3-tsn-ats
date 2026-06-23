@@ -101,7 +101,6 @@ int main(int argc, char *argv[])
     txDevice->SetAddress(Mac48Address::Allocate());
     rxDevice->SetAddress(Mac48Address::Allocate());
 
-    // Mandatory 8-queue structure initialization for TSN scheduling
     for (int i = 0; i < 8; i++)
     {
         txDevice->SetQueue(CreateObject<DropTailQueue<Packet>>());
