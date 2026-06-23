@@ -72,8 +72,8 @@ namespace ns3
         instance->SetAttribute("CommittedBurstSize", UintegerValue(cbs));
 
         // Set initial bucket empty time to current clock time or fallback to 0
-        Time currentTime = m_ats->GetClock() ? m_ats->GetClock()->GetLocalTime() : Seconds(0);
-        instance->SetBucketEmptyTime(currentTime);
+        // Time currentTime = m_ats->GetClock() ? m_ats->GetClock()->GetLocalTime() : Seconds(0);
+        // instance->SetBucketEmptyTime(currentTime);
 
         // Store the instance in our ID-to-Instance mapping
         m_idToInstanceMap[instanceId] = instance;
@@ -181,7 +181,8 @@ namespace ns3
                                                 << " | CurrentTime: " << currentTime.As(Time::S));
         NS_LOG_DEBUG("[ATS-DEBUG] LengthRecovery: " << lengthRecoveryDuration.As(Time::S)
                                                     << " | BucketEmptyTime Before: " << instance->GetBucketEmptyTime().As(Time::S)
-                                                    << " | SchedulerEligibilityTime: " << schedulerEligibilityTime.As(Time::S));
+                                                    << " | SchedulerEligibilityTime: " << schedulerEligibilityTime.As(Time::S)
+                                                    << " | BucketFullTime: " << bucketFullTime.As(Time::S));
         NS_LOG_DEBUG("[ATS-DEBUG] Evaluated EligibilityTime: " << eligibilityTime.As(Time::S)
                                                                << " | Residence Delay: " << residenceDelay.As(Time::S)
                                                                << " | Max Allowed Residence: " << m_maximumResidenceTime.As(Time::S));
