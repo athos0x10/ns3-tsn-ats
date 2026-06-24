@@ -2,7 +2,7 @@
 
 #include "ns3/log.h"
 #include "ns3/ats-scheduler-group.h"
-#include "stream-id-tag.h"
+#include "ns3/ethernet-header2.h"
 
 namespace ns3
 {
@@ -63,33 +63,41 @@ namespace ns3
     }
 
     bool
-    Ats::EnqueueFrame(Ptr<Packet> packet, uint32_t streamId,
+    Ats::EnqueueFrame(Ptr<Packet> packet,
                       uint32_t inputPortId, uint32_t outputPortId,
                       uint8_t priority, Ptr<TsnNetDevice> outputDevice,
                       Time hardwareLatency)
     {
-        NS_LOG_FUNCTION(this << packet << streamId << inputPortId << outputPortId << (uint32_t)priority);
+        NS_LOG_FUNCTION(this << packet << inputPortId << outputPortId << (uint32_t)priority);
 
-        StreamIdTag tag;
-        if (packet->FindFirstMatchingByteTag(tag))
-        {
-            streamId = tag.GetStreamId(); // Retrieve the unique id of the application
-        }
-
+        uint32_t internalId = 0;
         Ptr<AtsSchedulerGroup> targetGroup;
 
         if (inputPortId == LOCAL_INPUT_PORT)
         {
-            // End-station (one group for each stream)
-            targetGroup = GetGroup(inputPortId, outputPortId, streamId, outputDevice);
+            // End Station
+            Ptr<Packet> packetCopy = packet->Copy();
+            EthernetHeader2 ethHeader;
+            packetCopy->RemoveHeader(ethHeader);
+
+            uint16_t vlanId = ethHeader.GetVid();
+            Mac48Address destMac = ethHeader.GetDest();
+
+            uint8_t buffer[6];
+            destMac.CopyTo(buffer);
+            uint32_t macHash = (buffer[2] << 24) | (buffer[3] << 16) | (buffer[4] << 8) | buffer[5];
+
+            internalId = (static_cast<uint32_t>(vlanId) << 16) ^ macHash;
         }
         else
         {
             // Bridge
-            targetGroup = GetGroup(inputPortId, outputPortId, priority, outputDevice);
+            internalId = static_cast<uint32_t>(priority);
         }
 
-        return targetGroup->ProcessFrame(packet, streamId, hardwareLatency);
+        targetGroup = GetGroup(inputPortId, outputPortId, internalId, outputDevice);
+
+        return targetGroup->ProcessFrame(packet, hardwareLatency);
     }
 
 }

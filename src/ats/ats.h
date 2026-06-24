@@ -49,7 +49,6 @@ namespace ns3
          * incoming interface index must be provided.
          *
          * \param packet The network packet to be shaped and scheduled.
-         * \param streamId The unique identifier of the TSN stream this packet belongs to.
          * \param inputPortId The interface index of the ingress port, or LOCAL_INPUT_PORT if generated locally.
          * \param outputPortId The interface index of the egress port handling the transmission.
          * \param priority The Priority Code Point (PCP) or traffic class of the frame.
@@ -58,7 +57,7 @@ namespace ns3
          * \return True if the packet was successfully accepted into the ATS group queue,
          * false if it was dropped due to exceeding the maximum residence time.
          */
-        bool EnqueueFrame(Ptr<Packet> packet, uint32_t streamId,
+        bool EnqueueFrame(Ptr<Packet> packet,
                           uint32_t inputPortId, uint32_t outputPortId,
                           uint8_t priority, Ptr<TsnNetDevice> outputDevice,
                           Time hardwareLatency);
@@ -69,7 +68,7 @@ namespace ns3
          *
          * \param inputPortId The interface index of the ingress port, or LOCAL_INPUT_PORT for locally generated traffic.
          * \param outputPortId The interface index of the egress port.
-         * \param internalId The internal identifier (e.g., priority or stream ID)
+         * \param InternalId The internal id of the stream.
          * \param outputDevice Egress device to bind if a new group is created.
          * \return Pointer to the existing or newly created scheduler group.
          */
