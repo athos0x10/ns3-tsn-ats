@@ -38,14 +38,6 @@ else
     log_error "Failed to copy ATS source files."
 fi
 
-# Copy Stream ID tag
-log_info "Copying stream-id-tag.h..."
-if cp src/stream-id-tag.h ../eden-sim/contrib/traffic-generator/model/; then
-    log_success "stream-id-tag.h copied successfully."
-else
-    log_error "Failed to copy stream-id-tag.h."
-fi
-
 # Copy ATS tests
 log_info "Copying ats-test-suite.cc..."
 if cp test/ats-test-suite.cc ../eden-sim/contrib/tsn/test/; then
