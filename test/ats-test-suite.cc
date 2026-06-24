@@ -978,7 +978,7 @@ void AtsBridgeIngressIsolationTestCase::RecordRxTime(Ptr<const Packet> p)
     Ptr<Packet> originalPacket = p->Copy();
     EthernetHeader2 ethHeader;
     originalPacket->RemoveHeader(ethHeader);
-    m_rxSrcMacs.push_back(ethHeader.GetSource());
+    m_rxSrcMacs.push_back(ethHeader.GetSrc());
 }
 
 void AtsBridgeIngressIsolationTestCase::DoRun()
