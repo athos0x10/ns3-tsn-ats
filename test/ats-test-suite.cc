@@ -296,22 +296,22 @@ void AtsMultiAppIsolationTestCase::DoRun()
     ats->SetClock(clock0);
     ats->SetAttribute("MaxResidenceTime", TimeValue(MilliSeconds(5)));
 
-    // Application 1 -> Generates Stream ID 10
+    // Application 1
     Ptr<EthernetGenerator> app1 = CreateObject<EthernetGenerator>();
     app1->Setup(net0);
-    app1->SetAttribute("StreamId", UintegerValue(10));
     app1->SetAttribute("BurstSize", UintegerValue(2));
+    app1->SetAttribute("VlanID", UintegerValue(1));
     app1->SetAttribute("PayloadSize", UintegerValue(500));
     app1->SetAttribute("Period", TimeValue(Seconds(1)));
     n0->AddApplication(app1);
     app1->SetStartTime(MilliSeconds(10));
     app1->SetStopTime(MilliSeconds(10) + MicroSeconds(2));
 
-    // Application 2 -> Generates Stream ID 20 at the exact same arrival time
+    // Application 2
     Ptr<EthernetGenerator> app2 = CreateObject<EthernetGenerator>();
     app2->Setup(net0);
-    app2->SetAttribute("StreamId", UintegerValue(20));
     app2->SetAttribute("BurstSize", UintegerValue(2));
+    app2->SetAttribute("VlanID", UintegerValue(2));
     app2->SetAttribute("PayloadSize", UintegerValue(500));
     app2->SetAttribute("Period", TimeValue(Seconds(1)));
     n0->AddApplication(app2);
@@ -399,7 +399,6 @@ void AtsShapingLatencyTestCase::DoRun()
 
     Ptr<EthernetGenerator> app = CreateObject<EthernetGenerator>();
     app->Setup(net0);
-    app->SetAttribute("StreamId", UintegerValue(10));
     app->SetAttribute("BurstSize", UintegerValue(2));
     app->SetAttribute("PayloadSize", UintegerValue(500));
     app->SetAttribute("Period", TimeValue(Seconds(1)));
@@ -499,10 +498,9 @@ void AtsNoisyNeighborIsolationTestCase::DoRun()
 
     net1->TraceConnectWithoutContext("MacRx", MakeCallback(&AtsNoisyNeighborIsolationTestCase::ReceiveRx, this));
 
-    // App 1: Noisy Neighbor (Stream 10) -> Mass burst of 6 packets (causes policing drops)
+    // App 1: Noisy Neighbor -> Mass burst of 6 packets (causes policing drops)
     Ptr<EthernetGenerator> appMalicious = CreateObject<EthernetGenerator>();
     appMalicious->Setup(net0);
-    appMalicious->SetAttribute("StreamId", UintegerValue(10));
     appMalicious->SetAttribute("BurstSize", UintegerValue(6));
     appMalicious->SetAttribute("PayloadSize", UintegerValue(500));
     appMalicious->SetAttribute("Period", TimeValue(MicroSeconds(10)));
@@ -510,14 +508,13 @@ void AtsNoisyNeighborIsolationTestCase::DoRun()
     appMalicious->SetAttribute("PCP", UintegerValue(5));
     n0->AddApplication(appMalicious);
 
-    // App 2: Compliant Flow (Stream 20) -> Standard burst of 2 packets (must safely pass)
+    // App 2: Compliant Flow -> Standard burst of 2 packets (must safely pass)
     Ptr<EthernetGenerator> appCompliant = CreateObject<EthernetGenerator>();
     appCompliant->Setup(net0);
-    appCompliant->SetAttribute("StreamId", UintegerValue(20));
     appCompliant->SetAttribute("BurstSize", UintegerValue(2));
     appCompliant->SetAttribute("PayloadSize", UintegerValue(300));
     appCompliant->SetAttribute("Period", TimeValue(MicroSeconds(10)));
-    appCompliant->SetAttribute("VlanID", UintegerValue(1));
+    appCompliant->SetAttribute("VlanID", UintegerValue(2));
     appCompliant->SetAttribute("PCP", UintegerValue(5));
     n0->AddApplication(appCompliant);
 
@@ -680,6 +677,437 @@ void AtsBridgeTransitTestCase::DoRun()
 }
 
 /**
+ * \ingroup Ats-tests
+ * \brief Test case checking ATS dynamic instance multiplexing inside a single group on a SwitchNetDevice.
+ * \details Validates that two distinct applications sharing the same PCP (same group) but using
+ * different VLAN IDs (100 and 110) create two isolated shaper instances without mutual interference.
+ */
+class AtsBridgeMultiplexingTestCase : public TestCase
+{
+public:
+    AtsBridgeMultiplexingTestCase();
+    virtual ~AtsBridgeMultiplexingTestCase() {}
+
+private:
+    void DoRun() override;
+    void RecordRxTime(Ptr<const Packet> p);
+
+    std::vector<Time> m_rxTimes;
+    std::vector<uint32_t> m_rxVlans;
+};
+
+AtsBridgeMultiplexingTestCase::AtsBridgeMultiplexingTestCase()
+    : TestCase("Verify that an ATS shaper inside a Switch separates streams into unique instances within the same group") {}
+
+void AtsBridgeMultiplexingTestCase::RecordRxTime(Ptr<const Packet> p)
+{
+    m_rxTimes.push_back(Simulator::Now());
+
+    Ptr<Packet> originalPacket = p->Copy();
+    EthernetHeader2 ethHeader;
+    originalPacket->RemoveHeader(ethHeader);
+    m_rxVlans.push_back(ethHeader.GetVid());
+}
+
+void AtsBridgeMultiplexingTestCase::DoRun()
+{
+    m_rxTimes.clear();
+    m_rxVlans.clear();
+
+    Ptr<TsnNode> nSource = CreateObject<TsnNode>();
+    Ptr<TsnNode> nDest = CreateObject<TsnNode>();
+    Ptr<TsnNode> nSw1 = CreateObject<TsnNode>();
+
+    Ptr<Clock> clockSource = CreateObject<Clock>();
+    Ptr<Clock> clockSw1 = CreateObject<Clock>();
+    Ptr<Clock> clockDest = CreateObject<Clock>();
+    nSource->SetMainClock(clockSource);
+    nSw1->SetMainClock(clockSw1);
+    nDest->SetMainClock(clockDest);
+
+    Ptr<TsnNetDevice> netSource = CreateObject<TsnNetDevice>();
+    nSource->AddDevice(netSource);
+    Ptr<TsnNetDevice> netDest = CreateObject<TsnNetDevice>();
+    nDest->AddDevice(netDest);
+
+    Ptr<TsnNetDevice> netSw1_1 = CreateObject<TsnNetDevice>();
+    nSw1->AddDevice(netSw1_1);
+    Ptr<TsnNetDevice> netSw1_2 = CreateObject<TsnNetDevice>();
+    nSw1->AddDevice(netSw1_2);
+
+    netSource->SetAttribute("DataRate", DataRateValue(DataRate("1Gbps")));
+    netSw1_1->SetAttribute("DataRate", DataRateValue(DataRate("1Gbps")));
+    netSw1_2->SetAttribute("DataRate", DataRateValue(DataRate("1Gbps")));
+    netDest->SetAttribute("DataRate", DataRateValue(DataRate("1Gbps")));
+
+    Ptr<EthernetChannel> chA = CreateObject<EthernetChannel>();
+    netSource->Attach(chA);
+    netSw1_1->Attach(chA);
+
+    Ptr<EthernetChannel> chB = CreateObject<EthernetChannel>();
+    netSw1_2->Attach(chB);
+    netDest->Attach(chB);
+
+    Ptr<SwitchNetDevice> sw1 = CreateObject<SwitchNetDevice>();
+    sw1->SetAttribute("MinForwardingLatency", TimeValue(MicroSeconds(10)));
+    sw1->SetAttribute("MaxForwardingLatency", TimeValue(MicroSeconds(10)));
+    nSw1->AddDevice(sw1);
+    sw1->AddSwitchPort(netSw1_1);
+    sw1->AddSwitchPort(netSw1_2);
+
+    Mac48Address macDest = Mac48Address::Allocate();
+    netSource->SetAddress(Mac48Address::Allocate());
+    netDest->SetAddress(macDest);
+    sw1->SetAddress(Mac48Address::Allocate());
+
+    for (int i = 0; i < 8; i++)
+    {
+        netSource->SetQueue(CreateObject<DropTailQueue<Packet>>());
+        netDest->SetQueue(CreateObject<DropTailQueue<Packet>>());
+        netSw1_1->SetQueue(CreateObject<DropTailQueue<Packet>>());
+        netSw1_2->SetQueue(CreateObject<DropTailQueue<Packet>>());
+    }
+
+    sw1->AddForwardingTableEntry(macDest, 100, {netSw1_2});
+    sw1->AddForwardingTableEntry(macDest, 110, {netSw1_2});
+
+    netSw1_2->SetAttribute("isAtsEnabled", BooleanValue(true));
+    Ptr<Ats> atsEngine = netSw1_2->GetAts();
+    atsEngine->SetClock(clockSw1);
+    atsEngine->SetAttribute("MaxResidenceTime", TimeValue(MilliSeconds(20)));
+
+    netDest->TraceConnectWithoutContext("MacRx", MakeCallback(&AtsBridgeMultiplexingTestCase::RecordRxTime, this));
+
+    Ptr<EthernetGenerator> app1 = CreateObject<EthernetGenerator>();
+    app1->Setup(netSource);
+    app1->SetAttribute("Address", AddressValue(macDest));
+    app1->SetAttribute("BurstSize", UintegerValue(2));
+    app1->SetAttribute("PayloadSize", UintegerValue(1400)); // Total frame = 1422B
+    app1->SetAttribute("Period", TimeValue(MicroSeconds(5)));
+    app1->SetAttribute("PCP", UintegerValue(1));
+    app1->SetAttribute("VlanID", UintegerValue(100));
+    nSource->AddApplication(app1);
+    app1->SetStartTime(MilliSeconds(0));
+    app1->SetStopTime(MicroSeconds(2));
+
+    Ptr<EthernetGenerator> app2 = CreateObject<EthernetGenerator>();
+    app2->Setup(netSource);
+    app2->SetAttribute("Address", AddressValue(macDest));
+    app2->SetAttribute("BurstSize", UintegerValue(2));
+    app2->SetAttribute("PayloadSize", UintegerValue(1400)); // Total frame = 1422B
+    app2->SetAttribute("Period", TimeValue(MicroSeconds(5)));
+    app2->SetAttribute("PCP", UintegerValue(1));
+    app2->SetAttribute("VlanID", UintegerValue(110));
+    nSource->AddApplication(app2);
+    app2->SetStartTime(MilliSeconds(0));
+    app2->SetStopTime(MicroSeconds(2));
+
+    Simulator::Stop(MilliSeconds(50));
+    Simulator::Run();
+    Simulator::Destroy();
+
+    NS_TEST_ASSERT_MSG_EQ(m_rxTimes.size(), 4, "Bridge Multiplexing Failure: Packet loss detected.");
+
+    double interAppDelay = (m_rxTimes[2] - m_rxTimes[1]).GetMicroSeconds();
+    NS_TEST_ASSERT_MSG_LT(interAppDelay, 50.0, "Isolation Fault: App 2 was delayed by App 1's recovery time!");
+}
+
+/**
+ * \ingroup Ats-tests
+ * \brief Test case checking ATS scheduler group isolation based on traffic class priority (PCP).
+ * \details Validates that two distinct applications sharing the same stream attributes {VID, MAC}
+ * but operating on different PCPs (PCP 1 and PCP 2) instantiate separate AtsSchedulerGroups.
+ */
+class AtsBridgePcpPriorityTestCase : public TestCase
+{
+public:
+    AtsBridgePcpPriorityTestCase();
+    virtual ~AtsBridgePcpPriorityTestCase() {}
+
+private:
+    void DoRun() override;
+    void RecordRxTime(Ptr<const Packet> p);
+
+    std::vector<Time> m_rxTimes;
+    std::vector<uint8_t> m_rxPcps;
+};
+
+AtsBridgePcpPriorityTestCase::AtsBridgePcpPriorityTestCase()
+    : TestCase("Verify that an ATS shaper inside a Switch separates traffic categories into completely independent priority groups") {}
+
+void AtsBridgePcpPriorityTestCase::RecordRxTime(Ptr<const Packet> p)
+{
+    m_rxTimes.push_back(Simulator::Now());
+
+    Ptr<Packet> originalPacket = p->Copy();
+    EthernetHeader2 ethHeader;
+    originalPacket->RemoveHeader(ethHeader);
+    m_rxPcps.push_back(ethHeader.GetPcp());
+}
+
+void AtsBridgePcpPriorityTestCase::DoRun()
+{
+    m_rxTimes.clear();
+    m_rxPcps.clear();
+
+    Ptr<TsnNode> nSource = CreateObject<TsnNode>();
+    Ptr<TsnNode> nDest = CreateObject<TsnNode>();
+    Ptr<TsnNode> nSw1 = CreateObject<TsnNode>();
+
+    Ptr<Clock> clockSource = CreateObject<Clock>();
+    Ptr<Clock> clockSw1 = CreateObject<Clock>();
+    Ptr<Clock> clockDest = CreateObject<Clock>();
+    nSource->SetMainClock(clockSource);
+    nSw1->SetMainClock(clockSw1);
+    nDest->SetMainClock(clockDest);
+
+    Ptr<TsnNetDevice> netSource = CreateObject<TsnNetDevice>();
+    nSource->AddDevice(netSource);
+    Ptr<TsnNetDevice> netDest = CreateObject<TsnNetDevice>();
+    nDest->AddDevice(netDest);
+
+    Ptr<TsnNetDevice> netSw1_1 = CreateObject<TsnNetDevice>();
+    nSw1->AddDevice(netSw1_1);
+    Ptr<TsnNetDevice> netSw1_2 = CreateObject<TsnNetDevice>();
+    nSw1->AddDevice(netSw1_2);
+
+    netSource->SetAttribute("DataRate", DataRateValue(DataRate("1Gbps")));
+    netSw1_1->SetAttribute("DataRate", DataRateValue(DataRate("1Gbps")));
+    netSw1_2->SetAttribute("DataRate", DataRateValue(DataRate("1Gbps")));
+    netDest->SetAttribute("DataRate", DataRateValue(DataRate("1Gbps")));
+
+    Ptr<EthernetChannel> chA = CreateObject<EthernetChannel>();
+    netSource->Attach(chA);
+    netSw1_1->Attach(chA);
+
+    Ptr<EthernetChannel> chB = CreateObject<EthernetChannel>();
+    netSw1_2->Attach(chB);
+    netDest->Attach(chB);
+
+    Ptr<SwitchNetDevice> sw1 = CreateObject<SwitchNetDevice>();
+    sw1->SetAttribute("MinForwardingLatency", TimeValue(MicroSeconds(10)));
+    sw1->SetAttribute("MaxForwardingLatency", TimeValue(MicroSeconds(10)));
+    nSw1->AddDevice(sw1);
+    sw1->AddSwitchPort(netSw1_1);
+    sw1->AddSwitchPort(netSw1_2);
+
+    Mac48Address macDest = Mac48Address::Allocate();
+    netSource->SetAddress(Mac48Address::Allocate());
+    netDest->SetAddress(macDest);
+    sw1->SetAddress(Mac48Address::Allocate());
+
+    for (int i = 0; i < 8; i++)
+    {
+        netSource->SetQueue(CreateObject<DropTailQueue<Packet>>());
+        netDest->SetQueue(CreateObject<DropTailQueue<Packet>>());
+        netSw1_1->SetQueue(CreateObject<DropTailQueue<Packet>>());
+        netSw1_2->SetQueue(CreateObject<DropTailQueue<Packet>>());
+    }
+
+    sw1->AddForwardingTableEntry(macDest, 100, {netSw1_2});
+
+    netSw1_2->SetAttribute("isAtsEnabled", BooleanValue(true));
+    Ptr<Ats> atsEngine = netSw1_2->GetAts();
+    atsEngine->SetClock(clockSw1);
+    atsEngine->SetAttribute("MaxResidenceTime", TimeValue(MilliSeconds(20)));
+
+    netDest->TraceConnectWithoutContext("MacRx", MakeCallback(&AtsBridgePcpPriorityTestCase::RecordRxTime, this));
+
+    Ptr<EthernetGenerator> app1 = CreateObject<EthernetGenerator>();
+    app1->Setup(netSource);
+    app1->SetAttribute("Address", AddressValue(macDest));
+    app1->SetAttribute("BurstSize", UintegerValue(2));
+    app1->SetAttribute("PayloadSize", UintegerValue(1400));
+    app1->SetAttribute("Period", TimeValue(MicroSeconds(5)));
+    app1->SetAttribute("PCP", UintegerValue(2));
+    app1->SetAttribute("VlanID", UintegerValue(100));
+    nSource->AddApplication(app1);
+    app1->SetStartTime(MilliSeconds(0));
+    app1->SetStopTime(MicroSeconds(2));
+
+    Ptr<EthernetGenerator> app2 = CreateObject<EthernetGenerator>();
+    app2->Setup(netSource);
+    app2->SetAttribute("Address", AddressValue(macDest));
+    app2->SetAttribute("BurstSize", UintegerValue(2));
+    app2->SetAttribute("PayloadSize", UintegerValue(1400));
+    app2->SetAttribute("Period", TimeValue(MicroSeconds(5)));
+    app2->SetAttribute("PCP", UintegerValue(1));
+    app2->SetAttribute("VlanID", UintegerValue(100));
+    nSource->AddApplication(app2);
+    app2->SetStartTime(MilliSeconds(0));
+    app2->SetStopTime(MicroSeconds(2));
+
+    Simulator::Stop(MilliSeconds(50));
+    Simulator::Run();
+    Simulator::Destroy();
+
+    NS_TEST_ASSERT_MSG_EQ(m_rxTimes.size(), 4, "Bridge PCP Isolation Failure: Missing frames.");
+
+    double interGroupDelay = (m_rxTimes[1] - m_rxTimes[0]).GetMicroSeconds();
+    NS_TEST_ASSERT_MSG_LT(interGroupDelay, 50.0, "PCP Segregation Fault: High priority queue blocks on low priority scheduler timeline.");
+}
+
+/**
+ * \ingroup Ats-tests
+ * \brief Test case checking ATS scheduler group isolation based on ingress ports.
+ * \details Validates that two distinct source nodes transmitting concurrent bursts
+ * with identical VlanIDs and PCPs are assigned to separate AtsSchedulerGroups
+ * upon entering the switch from different ingress ports.
+ */
+class AtsBridgeIngressIsolationTestCase : public TestCase
+{
+public:
+    AtsBridgeIngressIsolationTestCase();
+    virtual ~AtsBridgeIngressIsolationTestCase() {}
+
+private:
+    void DoRun() override;
+    void RecordRxTime(Ptr<const Packet> p);
+
+    std::vector<Time> m_rxTimes;
+    std::vector<Mac48Address> m_rxSrcMacs;
+};
+
+AtsBridgeIngressIsolationTestCase::AtsBridgeIngressIsolationTestCase()
+    : TestCase("Verify that an ATS shaper inside a Switch isolates streams based on their physical ingress port") {}
+
+void AtsBridgeIngressIsolationTestCase::RecordRxTime(Ptr<const Packet> p)
+{
+    m_rxTimes.push_back(Simulator::Now());
+
+    Ptr<Packet> originalPacket = p->Copy();
+    EthernetHeader2 ethHeader;
+    originalPacket->RemoveHeader(ethHeader);
+    m_rxSrcMacs.push_back(ethHeader.GetSource());
+}
+
+void AtsBridgeIngressIsolationTestCase::DoRun()
+{
+    m_rxTimes.clear();
+    m_rxSrcMacs.clear();
+
+    Ptr<TsnNode> nSource1 = CreateObject<TsnNode>();
+    Ptr<TsnNode> nSource2 = CreateObject<TsnNode>();
+    Ptr<TsnNode> nDest = CreateObject<TsnNode>();
+    Ptr<TsnNode> nSw1 = CreateObject<TsnNode>();
+
+    Ptr<Clock> clockSrc1 = CreateObject<Clock>();
+    Ptr<Clock> clockSrc2 = CreateObject<Clock>();
+    Ptr<Clock> clockSw1 = CreateObject<Clock>();
+    Ptr<Clock> clockDest = CreateObject<Clock>();
+    nSource1->SetMainClock(clockSrc1);
+    nSource2->SetMainClock(clockSrc2);
+    nSw1->SetMainClock(clockSw1);
+    nDest->SetMainClock(clockDest);
+
+    Ptr<TsnNetDevice> netSource1 = CreateObject<TsnNetDevice>();
+    nSource1->AddDevice(netSource1);
+    Ptr<TsnNetDevice> netSource2 = CreateObject<TsnNetDevice>();
+    nSource2->AddDevice(netSource2);
+    Ptr<TsnNetDevice> netDest = CreateObject<TsnNetDevice>();
+    nDest->AddDevice(netDest);
+
+    Ptr<TsnNetDevice> netSw1_1 = CreateObject<TsnNetDevice>();
+    nSw1->AddDevice(netSw1_1);
+    Ptr<TsnNetDevice> netSw1_2 = CreateObject<TsnNetDevice>();
+    nSw1->AddDevice(netSw1_2);
+    Ptr<TsnNetDevice> netSw1_3 = CreateObject<TsnNetDevice>();
+    nSw1->AddDevice(netSw1_3);
+
+    netSource1->SetAttribute("DataRate", DataRateValue(DataRate("1Gbps")));
+    netSource2->SetAttribute("DataRate", DataRateValue(DataRate("1Gbps")));
+    netSw1_1->SetAttribute("DataRate", DataRateValue(DataRate("1Gbps")));
+    netSw1_2->SetAttribute("DataRate", DataRateValue(DataRate("1Gbps")));
+    netSw1_3->SetAttribute("DataRate", DataRateValue(DataRate("1Gbps")));
+    netDest->SetAttribute("DataRate", DataRateValue(DataRate("1Gbps")));
+
+    Ptr<EthernetChannel> chA = CreateObject<EthernetChannel>();
+    netSource1->Attach(chA);
+    netSw1_1->Attach(chA);
+
+    Ptr<EthernetChannel> chB = CreateObject<EthernetChannel>();
+    netSource2->Attach(chB);
+    netSw1_2->Attach(chB);
+
+    Ptr<EthernetChannel> chC = CreateObject<EthernetChannel>();
+    netSw1_3->Attach(chC);
+    netDest->Attach(chC);
+
+    Ptr<SwitchNetDevice> sw1 = CreateObject<SwitchNetDevice>();
+    sw1->SetAttribute("MinForwardingLatency", TimeValue(MicroSeconds(10)));
+    sw1->SetAttribute("MaxForwardingLatency", TimeValue(MicroSeconds(10)));
+    nSw1->AddDevice(sw1);
+    sw1->AddSwitchPort(netSw1_1);
+    sw1->AddSwitchPort(netSw1_2);
+    sw1->AddSwitchPort(netSw1_3);
+
+    Mac48Address macSrc1 = Mac48Address("00:00:00:00:00:01");
+    Mac48Address macSrc2 = Mac48Address("00:00:00:00:00:02");
+    Mac48Address macDest = Mac48Address("00:00:00:00:00:03");
+    netSource1->SetAddress(macSrc1);
+    netSource2->SetAddress(macSrc2);
+    netDest->SetAddress(macDest);
+    sw1->SetAddress(Mac48Address::Allocate());
+
+    for (int i = 0; i < 8; i++)
+    {
+        netSource1->SetQueue(CreateObject<DropTailQueue<Packet>>());
+        netSource2->SetQueue(CreateObject<DropTailQueue<Packet>>());
+        netDest->SetQueue(CreateObject<DropTailQueue<Packet>>());
+        netSw1_1->SetQueue(CreateObject<DropTailQueue<Packet>>());
+        netSw1_2->SetQueue(CreateObject<DropTailQueue<Packet>>());
+        netSw1_3->SetQueue(CreateObject<DropTailQueue<Packet>>());
+    }
+
+    sw1->AddForwardingTableEntry(macDest, 100, {netSw1_3});
+
+    netSw1_3->SetAttribute("isAtsEnabled", BooleanValue(true));
+    Ptr<Ats> atsEngine = netSw1_3->GetAts();
+    atsEngine->SetClock(clockSw1);
+    atsEngine->SetAttribute("MaxResidenceTime", TimeValue(MilliSeconds(20)));
+
+    netDest->TraceConnectWithoutContext("MacRx", MakeCallback(&AtsBridgeIngressIsolationTestCase::RecordRxTime, this));
+
+    // App 1 on Port 1 (PCP 3, VLAN 100)
+    Ptr<EthernetGenerator> app1 = CreateObject<EthernetGenerator>();
+    app1->Setup(netSource1);
+    app1->SetAttribute("Address", AddressValue(macDest));
+    app1->SetAttribute("BurstSize", UintegerValue(2));
+    app1->SetAttribute("PayloadSize", UintegerValue(1400));
+    app1->SetAttribute("Period", TimeValue(MicroSeconds(5)));
+    app1->SetAttribute("PCP", UintegerValue(3));
+    app1->SetAttribute("VlanID", UintegerValue(100));
+    nSource1->AddApplication(app1);
+    app1->SetStartTime(MilliSeconds(0));
+    app1->SetStopTime(MicroSeconds(2));
+
+    // App 2 on Port 2 (PCP 3, VLAN 100)
+    Ptr<EthernetGenerator> app2 = CreateObject<EthernetGenerator>();
+    app2->Setup(netSource2);
+    app2->SetAttribute("Address", AddressValue(macDest));
+    app2->SetAttribute("BurstSize", UintegerValue(2));
+    app2->SetAttribute("PayloadSize", UintegerValue(1400));
+    app2->SetAttribute("Period", TimeValue(MicroSeconds(5)));
+    app2->SetAttribute("PCP", UintegerValue(3));
+    app2->SetAttribute("VlanID", UintegerValue(100));
+    nSource2->AddApplication(app2);
+    app2->SetStartTime(MilliSeconds(0));
+    app2->SetStopTime(MicroSeconds(2));
+
+    Simulator::Stop(MilliSeconds(50));
+    Simulator::Run();
+    Simulator::Destroy();
+
+    // Verification layer
+    NS_TEST_ASSERT_MSG_EQ(m_rxTimes.size(), 4, "Ingress Isolation Failure: Missing packets.");
+
+    // If port-based isolation functions correctly, the first frames from both ports
+    // must arrive back-to-back at destination with minimal physical transmission gap (~11 us)
+    double ingressPortDelay = (m_rxTimes[1] - m_rxTimes[0]).GetMicroSeconds();
+    NS_TEST_ASSERT_MSG_LT(ingressPortDelay, 50.0, "Ingress Port Isolation Fault: Traffic from Port 2 was serialised/blocked by Port 1 timeline.");
+}
+
+/**
  * \ingroup ats-tests
  * \brief Main TestSuite registration class for the ATS module
  */
@@ -743,6 +1171,21 @@ AtsTestSuite::AtsTestSuite()
     // Test Case 6 : SwitchNetDevice Transit & L2 Forwarding Reshaping Check
     // -------------------------------------------------------------------------
     AddTestCase(new AtsBridgeTransitTestCase(), TestCase::QUICK);
+
+    // -------------------------------------------------------------------------
+    // Test Case 7 : SwitchNetDevice Multiplexing & Instance Separation (VLAN 100 & 110)
+    // -------------------------------------------------------------------------
+    AddTestCase(new AtsBridgeMultiplexingTestCase(), TestCase::QUICK);
+
+    // -------------------------------------------------------------------------
+    // Test Case 8 : SwitchNetDevice PCP Priority Group Segregation (PCP 1 vs PCP 2)
+    // -------------------------------------------------------------------------
+    AddTestCase(new AtsBridgePcpPriorityTestCase(), TestCase::QUICK);
+
+    // -------------------------------------------------------------------------
+    // Test Case 9 : SwitchNetDevice Ingress Port Isolation Check (Port 1 vs Port 2)
+    // -------------------------------------------------------------------------
+    AddTestCase(new AtsBridgeIngressIsolationTestCase(), TestCase::QUICK);
 }
 
 static AtsTestSuite m_atsTestSuite;
