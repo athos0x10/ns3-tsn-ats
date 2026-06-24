@@ -137,7 +137,6 @@ int main(int argc, char *argv[])
 
     Ptr<EthernetGenerator> app = CreateObject<EthernetGenerator>();
     app->Setup(txDevice);
-    app->SetAttribute("StreamId", UintegerValue(10));
     app->SetAttribute("BurstSize", UintegerValue(2));
     app->SetAttribute("PayloadSize", UintegerValue(500));
     app->SetAttribute("Period", TimeValue(Seconds(1)));

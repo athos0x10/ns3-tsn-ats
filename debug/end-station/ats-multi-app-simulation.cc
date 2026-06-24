@@ -113,13 +113,13 @@ int main(int argc, char *argv[])
     atsEngine->SetClock(srcClock);
     atsEngine->SetAttribute("MaxResidenceTime", TimeValue(MilliSeconds(5)));
 
-    // Application 1 -> Generates Stream ID #10
+    // Application 1
     Ptr<EthernetGenerator> app1 = CreateObject<EthernetGenerator>();
     app1->Setup(txDevice);
-    app1->SetAttribute("StreamId", UintegerValue(10));
     app1->SetAttribute("BurstSize", UintegerValue(1));
     app1->SetAttribute("PayloadSize", UintegerValue(500));
     app1->SetAttribute("Period", TimeValue(Seconds(1)));
+    app1->SetAttribute("VlanID", UintegerValue(1));
     srcNode->AddApplication(app1);
     app1->SetStartTime(MilliSeconds(20));
     app1->SetStopTime(MilliSeconds(25));
@@ -127,8 +127,8 @@ int main(int argc, char *argv[])
     // Application 2 -> Generates Stream ID #20 (Concurrent Transmission)
     Ptr<EthernetGenerator> app2 = CreateObject<EthernetGenerator>();
     app2->Setup(txDevice);
-    app2->SetAttribute("StreamId", UintegerValue(20));
     app2->SetAttribute("BurstSize", UintegerValue(1));
+    app1->SetAttribute("VlanID", UintegerValue(1));
     app2->SetAttribute("PayloadSize", UintegerValue(500));
     app2->SetAttribute("Period", TimeValue(Seconds(1)));
     srcNode->AddApplication(app2);
