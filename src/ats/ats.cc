@@ -62,6 +62,35 @@ namespace ns3
         return newGroup;
     }
 
+    Ptr<AtsSchedulerGroup> Ats::GetGroupForEndStation(Mac48Address destMac, uint16_t vlanId, Ptr<TsnNetDevice> egressDevice)
+    {
+        NS_LOG_FUNCTION(this << destMac << vlanId << egressDevice);
+        NS_ASSERT_MSG(egressDevice != nullptr, "Ats::GetGroupForEndStation: Egress device pointer cannot be null.");
+
+        // Compute the internalId
+        uint8_t buffer[6];
+        destMac.CopyTo(buffer);
+        uint32_t macHash = (buffer[2] << 24) | (buffer[3] << 16) | (buffer[4] << 8) | buffer[5];
+        uint32_t internalId = (static_cast<uint32_t>(vlanId) << 16) ^ macHash;
+
+        uint32_t outputPortId = egressDevice->GetIfIndex();
+
+        return Ats::GetGroup(Ats::LOCAL_INPUT_PORT, outputPortId, internalId, egressDevice);
+    }
+
+    Ptr<AtsSchedulerGroup> Ats::GetGroupForBridge(Ptr<TsnNetDevice> ingressDevice, Ptr<TsnNetDevice> egressDevice, uint8_t priority)
+    {
+        NS_LOG_FUNCTION(this << ingressDevice << egressDevice << priority);
+        NS_ASSERT_MSG(ingressDevice != nullptr, "Ats::GetGroupForBridge: Ingress device pointer cannot be null.");
+        NS_ASSERT_MSG(egressDevice != nullptr, "Ats::GetGroupForBridge: Egress device pointer cannot be null.");
+
+        uint32_t inputPortId = ingressDevice->GetIfIndex();
+        uint32_t outputPortId = egressDevice->GetIfIndex();
+        uint32_t internalId = static_cast<uint32_t>(priority);
+
+        return Ats::GetGroup(inputPortId, outputPortId, internalId, egressDevice);
+    }
+
     bool
     Ats::EnqueueFrame(Ptr<Packet> packet,
                       uint32_t inputPortId, uint32_t outputPortId,

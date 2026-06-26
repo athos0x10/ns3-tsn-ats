@@ -74,6 +74,30 @@ namespace ns3
          */
         Ptr<AtsSchedulerGroup> GetGroup(uint32_t inputPortId, uint32_t outputPortId, uint32_t internalId, Ptr<TsnNetDevice> outputDevice = nullptr);
 
+        /**
+         * \brief Ergonomic abstraction to retrieve a scheduler group for an End-Station (ES).
+         * \details Automatically abstracts the internal localized port mapping and binds
+         * the group directly to the egress device's unique interface index.
+         *
+         * \param destMac The destination mac address of the stream.
+         * \param vlanId The vlan id of the stream.
+         * \param egressDevice The outbound TsnNetDevice pointer of the End-Station.
+         * \return Pointer to the existing or newly created scheduler group.
+         */
+        Ptr<AtsSchedulerGroup> GetGroupForEndStation(Mac48Address destMac, uint16_t vlanId, Ptr<TsnNetDevice> egressDevice);
+
+        /**
+         * \brief Ergonomic abstraction to retrieve a scheduler group inside a Bridge/Switch.
+         * \details Automatically extracts interface indices from device pointers to prevent
+         * manual indexing mismatches.
+         *
+         * \param ingressDevice The inbound TsnNetDevice where the frame entered the switch.
+         * \param egressDevice The outbound TsnNetDevice handling the egress shaping.
+         * \param priority The Traffic Class / PCP identifier mapping to the internal queue.
+         * \return Pointer to the existing or newly created scheduler group.
+         */
+        Ptr<AtsSchedulerGroup> GetGroupForBridge(Ptr<TsnNetDevice> ingressDevice, Ptr<TsnNetDevice> egressDevice, uint8_t priority);
+
         // Getters and Setters
         Ptr<Clock> GetClock() { return m_clock; }
         void SetClock(Ptr<Clock> clock) { m_clock = clock; }
