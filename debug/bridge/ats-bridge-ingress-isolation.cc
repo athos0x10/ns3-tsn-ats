@@ -1,13 +1,12 @@
 /**
- * \file ats-bridge-ingress-isolation-analysis.cc
+ * \file ats-bridge-ingress-isolation.cc
  * \author Arthur
  * \date June 24, 2026
  * \brief Analysis script evaluating ATS scheduler group behavior for traffic
  * originating from different ingress ports.
  *
- * \details This script validates whether the ATS implementation groups frames
- * strictly by Traffic Class (Per-Priority aggregation) or separates them based
- * on the ingress interface (Per-Port-Per-Priority isolation).
+ * \details This script validates whether the ATS implementation separates groups
+ *  based on the ingress interface (Per-Port-Per-Priority isolation) or not.
  * * Topology:
  * - ESsource1 (Port 1) ---> [ SW1 ] ---> ESdest (Port 3)
  * - ESsource2 (Port 2) -------^ (ATS Enabled on Port 3 Egress)
@@ -183,10 +182,6 @@ int main(int argc, char *argv[])
 
     // Connect Listener
     netDest->TraceConnectWithoutContext("MacRx", MakeBoundCallback(&MacRxCallback, "ESdest"));
-
-    // =========================================================================
-    // TRAFFIC PROFILE SETUP: Parallel Bursts from Separate Ingress Interfaces
-    // =========================================================================
 
     // App 1 on ESsource1 (Sends 2 frames via Port 1, VLAN 100, PCP 3)
     Ptr<EthernetGenerator> app1 = CreateObject<EthernetGenerator>();

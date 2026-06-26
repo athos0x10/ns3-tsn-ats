@@ -1,5 +1,5 @@
 /**
- * \file ats-bridge-multiplexing-analysis.cc
+ * \file ats-bridge-pcp-isolation.cc
  * \author Arthur
  * \date June 24, 2026
  * \brief Analysis script for multi-application multiplexing with pcp inside an IEEE 802.1Qcr TSN Switch.
@@ -9,6 +9,8 @@
  * - Both applications inject high-rate bursts into SW1 on Port 1.
  * - SW1 switches and aggregates both applications onto Port 2 (egress) where ATS is enabled.
  * - ESdest captures the aggregated traffic to verify that the shaper spaces the interleaved frames.
+ *
+ * > What to observe: observe that we have one group for each priority.
  */
 
 #include "ns3/core-module.h"
@@ -141,10 +143,6 @@ int main(int argc, char *argv[])
     atsEngine->SetAttribute("MaxResidenceTime", TimeValue(MilliSeconds(20))); // Enough head-room for multiple streams
 
     netDest->TraceConnectWithoutContext("MacRx", MakeBoundCallback(&MacRxCallback, "ESdest"));
-
-    // =========================================================================
-    // MULTIPLEXING SETUP: 1 Node, 2 Applications running concurrently
-    // =========================================================================
 
     // Application 1 (Generates Burst of 2 frames, VLAN 100, PCP 2)
     Ptr<EthernetGenerator> app1 = CreateObject<EthernetGenerator>();

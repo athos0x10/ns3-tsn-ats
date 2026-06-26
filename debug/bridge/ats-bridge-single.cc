@@ -1,5 +1,5 @@
 /**
- * \file ats-bridge-forwarding-analysis.cc
+ * \file ats-bridge-single.cc
  * \author Arthur
  * \date June 23, 2026
  * \brief Analysis script for ATS transit inside an IEEE 802.1Qcr TSN SwitchNetDevice.

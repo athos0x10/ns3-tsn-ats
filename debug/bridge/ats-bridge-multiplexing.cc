@@ -1,5 +1,5 @@
 /**
- * \file ats-bridge-multiplexing-analysis.cc
+ * \file ats-bridge-multiplexing.cc
  * \author Arthur
  * \date June 24, 2026
  * \brief Analysis script for multi-application multiplexing inside an IEEE 802.1Qcr TSN Switch.
@@ -130,7 +130,6 @@ int main(int argc, char *argv[])
         netSw1_2->SetQueue(CreateObject<DropTailQueue<Packet>>());
     }
 
-    // Explicit unicast entry for VLAN 100 to avoid broadcast/flooding side-effects
     sw1->AddForwardingTableEntry(macDest, 100, {netSw1_2});
     sw1->AddForwardingTableEntry(macDest, 110, {netSw1_2});
 
@@ -138,13 +137,9 @@ int main(int argc, char *argv[])
     netSw1_2->SetAttribute("isAtsEnabled", BooleanValue(true));
     Ptr<Ats> atsEngine = netSw1_2->GetAts();
     atsEngine->SetClock(clockSw1);
-    atsEngine->SetAttribute("MaxResidenceTime", TimeValue(MilliSeconds(20))); // Enough head-room for multiple streams
+    atsEngine->SetAttribute("MaxResidenceTime", TimeValue(MilliSeconds(20)));
 
     netDest->TraceConnectWithoutContext("MacRx", MakeBoundCallback(&MacRxCallback, "ESdest"));
-
-    // =========================================================================
-    // MULTIPLEXING SETUP: 1 Node, 2 Applications running concurrently
-    // =========================================================================
 
     // Application 1 (Generates Burst of 2 frames, VLAN 100, PCP 1)
     Ptr<EthernetGenerator> app1 = CreateObject<EthernetGenerator>();
