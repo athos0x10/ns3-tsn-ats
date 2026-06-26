@@ -1,13 +1,12 @@
 /**
- * @file ats-multi-app-simulation.cc
+ * @file ats-es-multi-app.cc
  * @author Arthur
  * @date June 22, 2026
  * @brief Demonstration of ATS (Asynchronous Traffic Shaping) multi-application
  * isolation within a TSN End-Station.
  * * @details This script configures a source TSN node generating two concurrent
- * asynchronous streams (Stream 10 and Stream 20) to demonstrate how the ATS
- * engine (IEEE 802.1Qcr) enforces per-stream isolation using token-bucket
- * logic, preventing traffic mutual interference without global clock synchronization.
+ * asynchronous streams (with two different vlanID) to demonstrate how the ATS
+ * engine for end-station enforces per-stream isolation.
  *
  * @section arch Detailed Network and Component Architecture
  * @code
@@ -17,7 +16,7 @@
  * |                                                                       |
  * |   +------------------+                    +------------------+        |
  * |   |  Application 1   |                    |  Application 2   |        |
- * |   |  (Stream ID: 10) |                    |  (Stream ID: 20) |        |
+ * |   |  (Vlan ID : 1)   |                    |  (Vlan ID :  2)  |        |
  * |   +--------+---------+                    +--------+---------+        |
  * |            |                                       |                  |
  * |            v                                       v                  |
@@ -28,7 +27,7 @@
  * |  |  | ATS ENGINE (isAtsEnabled = true)                          |  |  |
  * |  |  |                                                           |  |  |
  * |  |  |  +--------------------+           +--------------------+  |  |  |
- * |  |  |  | Stream Queue #10   |           | Stream Queue #20   |  |  |  |
+ * |  |  |  | Stream Queue #1    |           | Stream Queue #2    |  |  |  |
  * |  |  |  +---------+----------+           +---------+----------+  |  |  |
  * |  |  |            |                                |             |  |  |
  * |  |  |            v                                v             |  |  |
@@ -128,7 +127,7 @@ int main(int argc, char *argv[])
     Ptr<EthernetGenerator> app2 = CreateObject<EthernetGenerator>();
     app2->Setup(txDevice);
     app2->SetAttribute("BurstSize", UintegerValue(1));
-    app1->SetAttribute("VlanID", UintegerValue(1));
+    app1->SetAttribute("VlanID", UintegerValue(2));
     app2->SetAttribute("PayloadSize", UintegerValue(500));
     app2->SetAttribute("Period", TimeValue(Seconds(1)));
     srcNode->AddApplication(app2);

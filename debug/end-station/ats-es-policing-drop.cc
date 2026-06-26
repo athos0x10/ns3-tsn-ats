@@ -1,13 +1,12 @@
 /**
- * @file ats-policing-drop.cc
+ * @file ats-es-policing-drop.cc
  * @author Arthur
  * @date June 22, 2026
- * @brief Demonstration of ATS (Asynchronous Traffic Shaping) policing and frame drop mechanisms.
+ * @brief Demonstration of ATS (Asynchronous Traffic Shaping) policing on frame drop mechanisms.
  *
  * @details This script simulates a dense burst of 5 frames to observe how the ATS
  * engine (IEEE 802.1Qcr) handles non-compliant traffic. By enforcing a strict 1ms
- * MaxResidenceTime ceiling, late-eligible packets inside the shaper bucket are discarded
- * to guarantee deterministic delay bounds for upstream traffic.
+ * MaxResidenceTime ceiling, late-eligible packets inside the shaper bucket are discarded.
  *
  * @section arch Component Architecture & Policing Logic
  * @code
@@ -33,7 +32,7 @@
  * |  |  | Pkt 1 -> Delay: 828.8 us  (<= 1ms) -------------------> [ALLOW]   |  |  |
  * |  |  | Pkt 2 -> Delay: 1243.2 us (> 1ms)  --[MaxResidence]--> [DROP!]    |  |  |
  * |  |  | Pkt 3 -> Delay: 1243.2 us (> 1ms)  --[MaxResidence]--> [DROP!]    |  |  |
- * |  |  | Pkt 4 -> Delay: 2243.2 us (> 1ms)  --[MaxResidence]--> [DROP!]    |  |  |
+ * |  |  | Pkt 4 -> Delay: 1243.2 us (> 1ms)  --[MaxResidence]--> [DROP!]    |  |  |
  * |  |  +-------------------------------------------------------------------+  |  |
  * |  |                                                                         |  |
  * |  |    +-------------------------------------------------------+            |  |
@@ -77,11 +76,13 @@ int main(int argc, char *argv[])
     n0->setActiveClock(0);
     n1->setActiveClock(0);
 
+    // Net device initialization
     Ptr<TsnNetDevice> net0 = CreateObject<TsnNetDevice>();
     n0->AddDevice(net0);
     Ptr<TsnNetDevice> net1 = CreateObject<TsnNetDevice>();
     n1->AddDevice(net1);
 
+    // Ensure that the rate is the same for each net device
     net0->SetAttribute("DataRate", DataRateValue(DataRate("1Gbps")));
     net1->SetAttribute("DataRate", DataRateValue(DataRate("1Gbps")));
 
@@ -98,6 +99,7 @@ int main(int argc, char *argv[])
         net1->SetQueue(CreateObject<DropTailQueue<Packet>>());
     }
 
+    // ATS configuration (Modification of the Maximum Residence Time)
     net0->SetAttribute("isAtsEnabled", BooleanValue(true));
     Ptr<Ats> ats = net0->GetAts();
     ats->SetClock(clock0);

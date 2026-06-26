@@ -1,5 +1,5 @@
 /**
- * @file ats-noisy-neighbor-analysis.cc
+ * @file ats-es-noisy-neighbor.cc
  * @author Arthur
  * @date June 23, 2026
  * @brief Terminal analysis script for ATS Stream ID segregation (Noisy Neighbor isolation).
@@ -89,7 +89,7 @@ int main(int argc, char *argv[])
 
     net1->TraceConnectWithoutContext("MacRx", MakeCallback(&RecordRxTraffic));
 
-    // APPLICATION 1: Stream 10 - The Noisy Neighbor (Payload = 500 -> Total Size = 522)
+    // APPLICATION 1: Stream vlanId 1 The Noisy Neighbor (Payload = 500 -> Total Size = 522)
     Ptr<EthernetGenerator> appMalicious = CreateObject<EthernetGenerator>();
     appMalicious->Setup(net0);
     appMalicious->SetAttribute("BurstSize", UintegerValue(6));
@@ -99,7 +99,7 @@ int main(int argc, char *argv[])
     appMalicious->SetAttribute("PCP", UintegerValue(5));
     n0->AddApplication(appMalicious);
 
-    // APPLICATION 2: Stream 20 - The Compliant Flow (Payload = 300 -> Total Size = 322)
+    // APPLICATION 2: Stream vlanId 2 The Compliant Flow (Payload = 300 -> Total Size = 322)
     Ptr<EthernetGenerator> appCompliant = CreateObject<EthernetGenerator>();
     appCompliant->Setup(net0);
     appCompliant->SetAttribute("BurstSize", UintegerValue(2));

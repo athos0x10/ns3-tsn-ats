@@ -1,11 +1,11 @@
 /**
- * @file ats-shaping-latency.cc
+ * @file ats-es-latency-view.cc
  * @author Arthur
  * @date June 22, 2026
- * @brief Verification and demonstration of ATS (Asynchronous Traffic Shaping) shaping latency accuracy.
+ * @brief Verification and demonstration of ATS shaping latency accuracy.
  *
  * @details This script validates the packet spacing precision of the ATS engine
- * (IEEE 802.1Qcr) against theoretical expectations. By capturing the precise arrival
+ * against theoretical expectations. By capturing the precise arrival
  * times of back-to-back burst frames at the receiver using trace callbacks, it proves
  * that the inter-packet gap perfectly matches the length recovery time dictated by the CIR.
  *
