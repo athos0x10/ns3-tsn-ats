@@ -38,6 +38,14 @@ else
     log_error "Failed to copy ATS source files."
 fi
 
+# Copy ATS examples
+log_info "Copying ATS examples files to eden-sim..."
+if cp examples/* ../eden-sim/contrib/tsn/examples/; then
+    log_success "ATS examples files copied successfully."
+else
+    log_error "Failed to copy ATS examples files."
+fi
+
 # Copy ATS tests
 log_info "Copying ats-test-suite.cc..."
 if cp test/ats-test-suite.cc ../eden-sim/contrib/tsn/test/; then

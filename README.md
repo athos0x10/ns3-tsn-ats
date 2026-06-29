@@ -17,6 +17,7 @@ This project was part of my internship in the **Electronic Systems group at Eind
 * */scratch*: Simulation scenarios.
 * */test*: Tests source code.
 * */docs*: Technical notes, references to the 802.1Qcr standard.
+* */examples*: Example files.
 * */debug*: Simulation scenarios for debug.
 
 ## Prerequisites & Installation
