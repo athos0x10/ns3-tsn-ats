@@ -6,133 +6,160 @@ We discuss how the ATS is implemented differently depending on the node's role: 
 
 ## Table of contents
 
-* [ATS for Bridges (Ingress Shaping)](https://www.google.com/search?q=%23ats-for-bridges-ingress-shaping)
-* [ATS for End-Stations (Egress Shaping & Per-Stream Isolation)](https://www.google.com/search?q=%23ats-for-end-stations-egress-shaping--per-stream-isolation)
-* [ATS Internal Processing (ProcessFrame & Scheduler)](https://www.google.com/search?q=%23ats-internal-processing-processframe--scheduler)
+- [Software architecture of the Scheduler](#software-architecture-of-the-scheduler)
+  - [Table of contents](#table-of-contents)
+  - [ATS for Bridges](#ats-for-bridges)
+    - [Group and Instance Identification](#group-and-instance-identification)
+    - [Frame Processing \& Lifecycle Diagram for bridges](#frame-processing--lifecycle-diagram-for-bridges)
+    - [Unified Bridge API Functions](#unified-bridge-api-functions)
+  - [ATS for End-Stations](#ats-for-end-stations)
+    - [Group and Instance Identification](#group-and-instance-identification-1)
+    - [Frame Processing \& Lifecycle Diagram for End-Stations](#frame-processing--lifecycle-diagram-for-end-stations)
+  - [Unified End-Station API Functions](#unified-end-station-api-functions)
 
----
 
-## ATS for Bridges (Ingress Shaping)
+## ATS for Bridges
 
-When a frame arrives at the ingress port of a bridge, it is processed sequentially inside `TsnNetDevice::Receive` before being routed to an output port. The boolean `m_atsEnabledForBridge` controls this behavior.
+When a frame arrives at the ingress port of a bridge, it is processed sequentially before being routed to an output queue. The boolean variable `m_atsEnabled` controls this behavior.
+
+### Group and Instance Identification
+
+1. **The ATS Group (`AtsSchedulerGroup`)**: It isolates traffic based on its physical routing path through the switch and its class of service. A group is uniquely identified by the following triplet:
+
+$$Group\_ID = (Input\_Port, Output\_Port, Output\_Queue)$$
+
+
+2. **The ATS Instance (Individual Shaper)**: Inside a single group, traffic is divided into token bucket sub-instances. By default, each distinct stream maps to its own instance based on its Layer 2 flow profile:
+
+$$Instance\_ID = (DestMac, VlanId)$$
+
+
+
+> **Dynamic Allocation & Aggregation**: If no configuration is pre-provisioned, the ATS subsystem automatically instantiates groups and instances on the fly using defaults (`CBS = 16384 bytes`, `CIR = 10 Mbps`, and `MaxResidenceTime = 1s`). During simulation setup, you can pre-create a bridge group and call `BindStreamToInstance` to aggregate multiple streams (e.g., different VLANs tracking the same path) onto a shared bandwidth envelope.
+
+### Frame Processing & Lifecycle Diagram for bridges
+
+The following Mermaid diagram traces the precise execution flow of a forwarded frame inside the Bridge ATS architecture, spanning from ingress arrival down to execution scheduling.
 
 ```mermaid
 graph TD
-    A[Packet Arrives from Channel] --> B["TsnNetDevice::Receive() <br> (Stream ID -> PSFP -> FRER)"]
-    B --> C{m_atsEnabledForBridge}
-    C -- true --> D["m_atsSchedulerGroup->ProcessFrame()"]
-    C -- false --> E["ForwardUp() <br> (Direct delivery to upper layer / bridge)"]
+    %% Nodes
+    A[Frame Arrives at Bridge Ingress Port] --> B[Ats::EnqueueFrame]
     
-    style A fill:#2d3748,stroke:#4a5568,stroke-width:2px,color:#fff
-    style B fill:#2d3748,stroke:#4a5568,stroke-width:2px,color:#fff
-    style C fill:#4a154b,stroke:#6b21a8,stroke-width:2px,color:#fff
-    style D fill:#1e3a8a,stroke:#2563eb,stroke-width:2px,color:#fff
-    style E fill:#064e3b,stroke:#059669,stroke-width:2px,color:#fff
+    subgraph AtsEngine [Ats Subsystem]
+        B --> C[Set internalId = priority]
+        C --> D[Ats::GetGroup inputPortId, outputPortId, internalId]
+        D -->|Not Found| E[Dynamically Instantiate AtsSchedulerGroup<br>Set Default MaxResidenceTime]
+        D -->|Found| F[Retrieve Existing AtsSchedulerGroup]
+        E --> G[targetGroup->ProcessFrame]
+        F --> G
+    end
+
+    subgraph GroupEngine [AtsSchedulerGroup Context]
+        G --> H[targetGroup->GetInstanceForStream vlanId, destMac]
+        H -->|Not Found| I[Dynamically Create Token Bucket Instance<br>Set Default CIR / CBS]
+        H -->|Found| J[Retrieve Shared / Explicit Token Bucket Instance]
+        I --> K[Compute SchedulerEligibilityTime based on CIR/CBS]
+        J --> K
+        
+        K --> L{Is Residence Delay > MaxResidenceTime?}
+        L -->|Yes| M[DROP FRAME]
+        L -->|No| N{Is EligibilityTime <= CurrentTime?}
+    end
+
+    subgraph Transmission [Egress Queuing & Execution]
+        N -->|Yes| O[Mark Immediately Eligible<br>Inject Directly into Priority Output Queue]
+        N -->|No| P[Schedule Future Transmission Event<br>Insert into Calendar Queue]
+    end
+
+    %% Styles
+    classDef default fill:#f9f9f9,stroke:#333,stroke-width:1px;
+    classDef action fill:#e1f5fe,stroke:#0288d1,stroke-width:1px;
+    classDef decision fill:#fff9c4,stroke:#fbc02d,stroke-width:1px;
+    classDef drop fill:#ffebee,stroke:#c62828,stroke-width:1px;
+    
+    class B,D,G,H action;
+    class L,N decision;
+    class M drop;
 
 ```
 
----
+### Unified Bridge API Functions
 
-## ATS for End-Stations (Egress Shaping & Per-Stream Isolation)
+To safely interact with this architecture without manipulating raw map indices or magic hash tokens, use the following core methods:
 
-For an End-Station, we do not want to introduce latency upon reception. Instead, we shape the traffic **at the emission source** inside the `TsnNetDevice::SendFrom` function, controlled by the boolean `m_atsEnabledForES`.
+* **Group Retrieval**: `Ptr<AtsSchedulerGroup> Ats::GetGroupForBridge(Ptr<TsnNetDevice> ingressDevice, Ptr<TsnNetDevice> egressDevice, uint8_t priority);`
+*Extracts interface indices directly from device pointers to prevent indexing mismatches.*
+* **Instance Provisioning**: `uint32_t CreateAtsInstance(DataRate cir, uint32_t cbs);`
+*Allocates a customized shaping rate inside a specific group.*
+* **Stream Aggregation**: `bool BindStreamToInstance(StreamKey streamKey, uint32_t instanceId);`
+*Binds a `{VlanId, DestMac}` profile to an existing token bucket instance to enforce shared shaping.*
 
-Furthermore, to guarantee Strict Isolation at the end-station level, the architecture enforces a **1 Stream = 1 Instance = 1 Group** mapping. Every unique application stream gets its own independent token bucket and shaping queue.
+## ATS for End-Stations
+
+For an End-Station, we do not want to introduce latency upon reception. Instead, we shape the traffic **at the emission source** right before transmission, controlled by the boolean `m_atsEnabled`.
+
+### Group and Instance Identification
+
+Unlike bridges which group traffic by input-output port pairs, an End-Station maps shaping mechanisms directly to network stream profiles. By default, the mapping adheres to a strict one-to-one relationship:
+
+$$\text{One Stream} = \text{One Group} = \text{One Instance}$$
+
+Thus, for each unique **StreamKey** $(DestMac, VlanId)$, a unique dedicated scheduler group is allocated, housing a single corresponding token bucket instance inside it.
+
+### Frame Processing & Lifecycle Diagram for End-Stations
+
+The main architectural shift here is how the `internalId` is derived. Because there is no physical ingress port (`inputPortId` defaults to `Ats::LOCAL_INPUT_PORT`), the unique internal index is computed by shifting the `VlanId` and XORing it with a 32-bit hash generated from the lower bytes of the destination MAC address.
 
 ```mermaid
 graph TD
-    A[Application Generates Packet] --> B["TsnNetDevice::SendFrom() <br> (Extract PCP / Header Prep)"]
-    B --> C{m_atsEnabledForES}
-    C -- true --> D["Dynamic Mapping: <br> Stream ID -> Unique AtsSchedulerGroup"]
-    C -- false --> E["Standard FIFO Queue <br> (Direct insertion into m_queues[pcp])"]
-    D --> F["Per-Stream Shaper <br> m_atsStreamSchedulerGroups[streamHandle]->ProcessFrame()"]
+    %% Nodes
+    A[Local Application Generates Frame] --> B[Ats::EnqueueFrame]
     
-    style A fill:#2d3748,stroke:#4a5568,stroke-width:2px,color:#fff
-    style B fill:#2d3748,stroke:#4a5568,stroke-width:2px,color:#fff
-    style C fill:#4a154b,stroke:#6b21a8,stroke-width:2px,color:#fff
-    style D fill:#2d3748,stroke:#4a5568,stroke-width:2px,color:#fff
-    style F fill:#1e3a8a,stroke:#2563eb,stroke-width:2px,color:#fff
-    style E fill:#064e3b,stroke:#059669,stroke-width:2px,color:#fff
+    subgraph AtsEngine [Ats Subsystem]
+        B --> C[Extract VlanId & DestMac from Frame En-tete]
+        C --> D["Compute internalId:<br>(VlanId << 16) ^ MacHash"]
+        D --> E[Ats::GetGroup LOCAL_INPUT_PORT, egressPortId, internalId]
+        E -->|Not Found| F[Dynamically Instantiate AtsSchedulerGroup<br>Set Default MaxResidenceTime]
+        E -->|Found| G[Retrieve Existing AtsSchedulerGroup]
+        F --> H[targetGroup->ProcessFrame]
+        G --> H
+    end
+
+    subgraph GroupEngine [AtsSchedulerGroup Context]
+        H --> I[targetGroup->GetInstanceForStream vlanId, destMac]
+        I -->|Not Found| J[Dynamically Create Token Bucket Instance<br>Set Default CIR / CBS]
+        I -->|Found| K[Retrieve Dedicated Token Bucket Instance]
+        J --> L[Compute SchedulerEligibilityTime based on CIR/CBS]
+        K --> L
+        
+        L --> M{Is Residence Delay > MaxResidenceTime?}
+        M -->|Yes| N[DROP FRAME]
+        M -->|No| O{Is EligibilityTime <= CurrentTime?}
+    end
+
+    subgraph Transmission [Egress Queuing & Execution]
+        O -->|Yes| P[Mark Immediately Eligible<br>Inject Directly into Priority Output Queue]
+        O -->|No| Q[Schedule Future Transmission Event<br>Insert into Calendar Queue]
+    end
+
+    %% Styles
+    classDef default fill:#f9f9f9,stroke:#333,stroke-width:1px;
+    classDef action fill:#e1f5fe,stroke:#0288d1,stroke-width:1px;
+    classDef decision fill:#fff9c4,stroke:#fbc02d,stroke-width:1px;
+    classDef drop fill:#ffebee,stroke:#c62828,stroke-width:1px;
+    
+    class B,D,E,I action;
+    class M,O decision;
+    class N drop;
 
 ```
 
----
+## Unified End-Station API Functions
 
-## ATS Internal Processing (ProcessFrame & Scheduler)
+To safely interact with this architecture without manipulating raw map indices or magic hash tokens, use the following core methods:
 
-Whether triggered by a Bridge (Ingress) or an End-Station (Egress), the core execution of `ProcessFrame()` remains identical, utilizing a time-ordered `std::multiset` and a precise callback scheduling system.
-
-### Sorting Strategy: The Custom Comparator
-
-```cpp
-struct AtsPacketInfo
-{
-    Ptr<Packet> packet;
-    Time eligibilityTime;
-    uint8_t priority;
-    uint32_t streamHandle;
-    Time hardwareLatency;
-};
-
-struct AtsPacketComparator
-{
-    bool operator()(const AtsPacketInfo a, const AtsPacketInfo b) const
-    {
-        // 1. Earlier eligibility times must be processed first
-        if (a.eligibilityTime != b.eligibilityTime)
-        {
-            return a.eligibilityTime < b.eligibilityTime;
-        }
-        // 2. Tie-breaker: Higher priority values (PCP) come first
-        return a.priority > b.priority;
-    }
-};
-
-```
-
-### ProcessFrame & Event Scheduling Pipeline
-
-```mermaid
-%%{init: {'theme': 'dark', 'themeVariables': { 'lineColor': '#6366f1' }}}%%
-sequenceDiagram
-    autonumber
-    participant NetDevice as TsnNetDevice
-    participant ATS as AtsSchedulerGroup
-    participant Queue as m_atsEventQueue (multiset)
-    participant Sim as ns-3 Simulator Loop
-
-    Note over NetDevice,ATS: Execution of ProcessFrame()
-    NetDevice->>ATS: ProcessFrame(packet, streamHandle)
-    ATS->>ATS: Calculate Eligibility Time (Token Bucket)
-    ATS->>Queue: Insert AtsPacketInfo (Auto-sorted)
-    
-    Note over ATS,Queue: Check if new packet is earliest event
-    Queue-->>ATS: Peek front element
-    
-    alt New packet is the earliest event
-        ATS->>Sim: Cancel previous scheduled HandleTxCallback
-        ATS->>Sim: Schedule HandleTxCallback(at new eligibilityTime)
-    else New packet is NOT the earliest event
-        ATS->>ATS: Keep current timer running (sequential wait)
-    end
-
-    Note over Sim: ... Time elapses until Eligibility Time reached ...
-
-    Sim->>ATS: Trigger Event: HandleTxCallback()
-    ATS->>Queue: Pop front element (Earliest Packet)
-    
-    alt Node Role: Bridge
-        ATS->>NetDevice: ForwardUp(packet)
-    else Node Role: End-Station
-        ATS->>NetDevice: m_queues[pcp]->Enqueue(packet)
-    end
-
-    Note over ATS,Queue: Reschedule next packet if any
-    Queue-->>ATS: Is queue empty?
-    alt Queue is NOT empty
-        ATS->>Sim: Schedule HandleTxCallback(for new front packet)
-    else Queue is empty
-        ATS->>ATS: Enter Passive/Sleep Mode
-    end
-
-```
+* **Group Retrieval**: `Ptr<AtsSchedulerGroup> Ats::GetGroupForEndStation(Mac48Address destMac, uint16_t vlanId, Ptr<TsnNetDevice> egressDevice);`
+*Abstracts the internal `LOCAL_INPUT_PORT` parameter, automatically computes the MAC/VLAN XOR hash identity, and queries the standard ns-3 interface indices safely.*
+* **Instance Provisioning**: `uint32_t CreateAtsInstance(DataRate cir, uint32_t cbs);`
+*Allocates a customized shaping rate inside the specific stream group.*
