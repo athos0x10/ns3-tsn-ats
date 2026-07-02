@@ -48,15 +48,9 @@ int main(int argc, char *argv[])
     Ptr<Clock> clock0 = CreateObject<Clock>();
     Ptr<Clock> clock1 = CreateObject<Clock>();
     Ptr<Clock> clock2 = CreateObject<Clock>();
-    n0->SetMainClock(clock0);
-    n1->SetMainClock(clock1);
-    n2->SetMainClock(clock2);
     n0->AddClock(clock0);
     n1->AddClock(clock1);
     n2->AddClock(clock2);
-    n0->setActiveClock(0);
-    n1->setActiveClock(0);
-    n2->setActiveClock(0);
 
     // Create and add a netDevice to each node
     Ptr<TsnNetDevice> net0 = CreateObject<TsnNetDevice>();
