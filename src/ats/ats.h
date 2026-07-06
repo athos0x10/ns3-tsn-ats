@@ -54,13 +54,14 @@ namespace ns3
          * \param priority The Priority Code Point (PCP) or traffic class of the frame.
          * \param outputDevice Pointer to the egress TsnNetDevice where the packet will be reinjected.
          * \param hardwareLatency The cumulative hardware processing latency experienced by the packet.
+         * \param streamHandle The unique identifier of the stream.
          * \return True if the packet was successfully accepted into the ATS group queue,
          * false if it was dropped due to exceeding the maximum residence time.
          */
         bool EnqueueFrame(Ptr<Packet> packet,
                           uint32_t inputPortId, uint32_t outputPortId,
                           uint8_t priority, Ptr<TsnNetDevice> outputDevice,
-                          Time hardwareLatency);
+                          Time hardwareLatency, uint32_t streamHandle);
 
         /**
          * \brief Retrieve or dynamically create an AtsSchedulerGroup.

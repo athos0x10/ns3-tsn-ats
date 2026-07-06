@@ -95,7 +95,7 @@ namespace ns3
     Ats::EnqueueFrame(Ptr<Packet> packet,
                       uint32_t inputPortId, uint32_t outputPortId,
                       uint8_t priority, Ptr<TsnNetDevice> outputDevice,
-                      Time hardwareLatency)
+                      Time hardwareLatency, uint32_t streamHandle)
     {
         NS_LOG_FUNCTION(this << packet << inputPortId << outputPortId << (uint32_t)priority);
 
@@ -117,6 +117,7 @@ namespace ns3
             uint32_t macHash = (buffer[2] << 24) | (buffer[3] << 16) | (buffer[4] << 8) | buffer[5];
 
             internalId = (static_cast<uint32_t>(vlanId) << 16) ^ macHash;
+            streamHandle = internalId;
         }
         else
         {
@@ -126,7 +127,7 @@ namespace ns3
 
         targetGroup = GetGroup(inputPortId, outputPortId, internalId, outputDevice);
 
-        return targetGroup->ProcessFrame(packet, hardwareLatency);
+        return targetGroup->ProcessFrame(packet, hardwareLatency, streamHandle);
     }
 
 }

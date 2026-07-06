@@ -77,9 +77,9 @@ namespace ns3
     }
 
     bool
-    AtsSchedulerGroup::BindStreamToInstance(StreamKey streamKey, uint32_t instanceId)
+    AtsSchedulerGroup::BindStreamToInstance(uint32_t streamHandle, uint32_t instanceId)
     {
-        NS_LOG_FUNCTION(this << streamKey.vlanId << streamKey.destMac << instanceId);
+        NS_LOG_FUNCTION(this << streamHandle << instanceId);
 
         // Check if the requested ATS instance actually exists in this group
         auto itInstance = m_idToInstanceMap.find(instanceId);
@@ -90,34 +90,45 @@ namespace ns3
         }
 
         // Check if the stream was already bound somewhere else
-        auto itStream = m_streamToInstanceMap.find(streamKey);
+        auto itStream = m_streamToInstanceMap.find(streamHandle);
         if (itStream != m_streamToInstanceMap.end())
         {
-            NS_LOG_INFO("AtsSchedulerGroup: Stream {VID: " << streamKey.vlanId << ", MAC: " << streamKey.destMac
-                                                           << "} is already bound. Moving it to the new Instance ID " << instanceId);
+            NS_LOG_INFO("AtsSchedulerGroup: Stream ID: " << streamHandle << " is already bound. Moving it to the new Instance ID " << instanceId);
         }
 
         // Bind (or overwrite) the stream to the existing instance pointer
-        m_streamToInstanceMap[streamKey] = itInstance->second;
+        m_streamToInstanceMap[streamHandle] = itInstance->second;
 
         return true;
     }
 
-    Ptr<AtsSchedulerInstance>
-    AtsSchedulerGroup::GetInstanceForStream(StreamKey streamKey)
+    bool
+    AtsSchedulerGroup::BindStreamToInstanceES(Mac48Address destMac, uint16_t vlanId, uint32_t instanceId)
     {
-        NS_LOG_FUNCTION(this << streamKey.vlanId << streamKey.destMac);
+        NS_LOG_FUNCTION(this << destMac << vlanId << instanceId);
 
-        auto it = m_streamToInstanceMap.find(streamKey);
+        uint8_t buffer[6];
+        destMac.CopyTo(buffer);
+        uint32_t macHash = (buffer[2] << 24) | (buffer[3] << 16) | (buffer[4] << 8) | buffer[5];
+
+        uint32_t internalId = (static_cast<uint32_t>(vlanId) << 16) ^ macHash;
+        return BindStreamToInstance(internalId, instanceId);
+    }
+
+    Ptr<AtsSchedulerInstance>
+    AtsSchedulerGroup::GetInstanceForStream(uint32_t streamHandle)
+    {
+        NS_LOG_FUNCTION(this << streamHandle);
+
+        auto it = m_streamToInstanceMap.find(streamHandle);
         if (it != m_streamToInstanceMap.end())
         {
             return it->second;
         }
 
         // If no mapping exists, auto-instanciate a dedicated ATS instance
-        NS_LOG_INFO("AtsSchedulerGroup: No explicit instance found for Stream {VID: "
-                    << streamKey.vlanId << ", MAC: " << streamKey.destMac
-                    << "}. Creating a dynamic default instance.");
+        NS_LOG_INFO("AtsSchedulerGroup: No explicit instance found for Stream ID: "
+                    << streamHandle << " Creating a dynamic default instance.");
 
         // Create the new instance using default group values
         uint32_t dynamicInstanceId = CreateAtsInstance(m_defaultCir, m_defaultCbs);
@@ -126,13 +137,13 @@ namespace ns3
         Ptr<AtsSchedulerInstance> dynamicInstance = m_idToInstanceMap[dynamicInstanceId];
 
         // Bind this stream ID to the newly created instance permanently
-        m_streamToInstanceMap[streamKey] = dynamicInstance;
+        m_streamToInstanceMap[streamHandle] = dynamicInstance;
 
         return dynamicInstance;
     }
 
     bool
-    AtsSchedulerGroup::ProcessFrame(Ptr<Packet> packet, Time hardwareLatency)
+    AtsSchedulerGroup::ProcessFrame(Ptr<Packet> packet, Time hardwareLatency, uint32_t streamHandle)
     {
         Time currentTime = (m_ats && m_ats->GetClock()) ? m_ats->GetClock()->GetLocalTime() : Simulator::Now();
         uint32_t sizeBits = packet->GetSize() * 8;
@@ -151,12 +162,8 @@ namespace ns3
         packetCopy->RemoveHeader(ethHeader);
         priority = ethHeader.GetPcp();
 
-        StreamKey key;
-        key.vlanId = ethHeader.GetVid();
-        key.destMac = ethHeader.GetDest();
-
         // Retrieve the instance associated with the stream
-        Ptr<AtsSchedulerInstance> instance = GetInstanceForStream(key);
+        Ptr<AtsSchedulerInstance> instance = GetInstanceForStream(streamHandle);
 
         double cir = instance->GetCir().GetBitRate();
         uint32_t cbs = instance->GetCbs();
@@ -252,8 +259,6 @@ namespace ns3
         AtsPacketInfo urgentPacket = *it;
         m_calendarQueue.erase(it);
 
-        // =========================================================================
-        // MESSAGE DE DEBUG : Libération du paquet
         // =========================================================================
         NS_LOG_DEBUG("[ATS-TX-RELEASE] Packet UID: " << urgentPacket.packet->GetUid()
                                                      << " | Target Eligibility: +" << urgentPacket.eligibilityTime.GetSeconds() << "s"

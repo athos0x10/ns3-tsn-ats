@@ -127,7 +127,7 @@ int main(int argc, char *argv[])
     Ptr<EthernetGenerator> app2 = CreateObject<EthernetGenerator>();
     app2->Setup(txDevice);
     app2->SetAttribute("BurstSize", UintegerValue(1));
-    app1->SetAttribute("VlanID", UintegerValue(2));
+    app2->SetAttribute("VlanID", UintegerValue(2));
     app2->SetAttribute("PayloadSize", UintegerValue(500));
     app2->SetAttribute("Period", TimeValue(Seconds(1)));
     srcNode->AddApplication(app2);

@@ -12,6 +12,7 @@
 #include "ns3/tsn-module.h"
 #include "ns3/drop-tail-queue.h"
 #include "ns3/ethernet-generator.h"
+#include "ns3/stream-identification-function-null.h"
 
 /**
  * \file
@@ -80,12 +81,21 @@ int main(int argc, char *argv[])
     }
 
     // Create and add a switch net device to the switch node
+    Mac48Address macDest = Mac48Address::ConvertFrom(net1->GetAddress());
     Ptr<SwitchNetDevice> sw = CreateObject<SwitchNetDevice>();
     sw->SetAttribute("MinForwardingLatency", TimeValue(MicroSeconds(10)));
     sw->SetAttribute("MaxForwardingLatency", TimeValue(MicroSeconds(10)));
     n2->AddDevice(sw);
     sw->AddSwitchPort(net2_0);
     sw->AddSwitchPort(net2_1);
+    sw->AddForwardingTableEntry(macDest, 100, {net2_1});
+
+    // Stream Identification
+    Ptr<NullStreamIdentificationFunction> sif1 = CreateObject<NullStreamIdentificationFunction>();
+    uint16_t streamHandle1 = 10;
+    sif1->SetAttribute("VlanID", UintegerValue(100));
+    sif1->SetAttribute("Address", AddressValue(macDest));
+    n2->AddStreamIdentificationFunction(streamHandle1, sif1, {net2_0}, {}, {}, {});
 
     // Create Ethernet Channel and attach it to the netDevices
     Ptr<EthernetChannel> l0 = CreateObject<EthernetChannel>();
@@ -116,7 +126,6 @@ int main(int argc, char *argv[])
 
     // Appliction configuration
     // Fix: Declare macDest before configuring the application
-    Mac48Address macDest = Mac48Address::ConvertFrom(net1->GetAddress());
     sw->AddForwardingTableEntry(macDest, 100, {net2_1});
     Ptr<EthernetGenerator> app0 = CreateObject<EthernetGenerator>();
     app0->Setup(net0);

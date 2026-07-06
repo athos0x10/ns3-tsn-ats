@@ -22,6 +22,7 @@
 #include "ns3/ethernet-channel.h"
 #include "ns3/ethernet-generator.h"
 #include "ns3/ats.h"
+#include "ns3/stream-identification-function-null.h"
 
 using namespace ns3;
 
@@ -73,6 +74,19 @@ int main(int argc, char *argv[])
         swPort2->SetQueue(CreateObject<DropTailQueue<Packet>>());
     }
 
+    // Stream Identification
+    uint16_t streamHandle1 = 10;
+    Ptr<NullStreamIdentificationFunction> sif1 = CreateObject<NullStreamIdentificationFunction>();
+    sif1->SetAttribute("VlanID", UintegerValue(100));
+    sif1->SetAttribute("Address", AddressValue(es2Mac));
+    sw1->AddStreamIdentificationFunction(streamHandle1, sif1, {swPort1}, {}, {}, {});
+
+    uint16_t streamHandle2 = 20;
+    Ptr<NullStreamIdentificationFunction> sif2 = CreateObject<NullStreamIdentificationFunction>();
+    sif2->SetAttribute("VlanID", UintegerValue(200));
+    sif2->SetAttribute("Address", AddressValue(es2Mac));
+    sw1->AddStreamIdentificationFunction(streamHandle2, sif2, {swPort1}, {}, {}, {});
+
     swPort2->SetAttribute("isAtsEnabled", BooleanValue(true));
     Ptr<Ats> swAtsEngine = swPort2->GetAts();
 
@@ -83,16 +97,8 @@ int main(int argc, char *argv[])
     uint32_t sharedInstId = bridgeGroup->CreateAtsInstance(DataRate("15Mbps"), 32768);
 
     // Aggregation of the two application
-    AtsSchedulerGroup::StreamKey stream1;
-    stream1.vlanId = 100;
-    stream1.destMac = es2Mac;
-
-    AtsSchedulerGroup::StreamKey stream2;
-    stream2.vlanId = 200;
-    stream2.destMac = es2Mac;
-
-    bridgeGroup->BindStreamToInstance(stream1, sharedInstId);
-    bridgeGroup->BindStreamToInstance(stream2, sharedInstId);
+    bridgeGroup->BindStreamToInstance(streamHandle1, sharedInstId);
+    bridgeGroup->BindStreamToInstance(streamHandle2, sharedInstId);
 
     Ptr<EthernetGenerator> app1 = CreateObject<EthernetGenerator>();
     app1->Setup(netEs1);

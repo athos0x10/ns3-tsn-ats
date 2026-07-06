@@ -25,6 +25,7 @@
 #include "ns3/ethernet-generator.h"
 #include "ns3/ethernet-header2.h"
 #include "ns3/ats.h"
+#include "ns3/stream-identification-function-null.h"
 
 using namespace ns3;
 
@@ -132,6 +133,19 @@ int main(int argc, char *argv[])
 
     sw1->AddForwardingTableEntry(macDest, 100, {netSw1_2});
     sw1->AddForwardingTableEntry(macDest, 110, {netSw1_2});
+
+    // Stream identification
+    Ptr<NullStreamIdentificationFunction> sif1 = CreateObject<NullStreamIdentificationFunction>();
+    uint16_t streamHandle1 = 10;
+    sif1->SetAttribute("VlanID", UintegerValue(100));
+    sif1->SetAttribute("Address", AddressValue(macDest));
+    nSw1->AddStreamIdentificationFunction(streamHandle1, sif1, {netSw1_1}, {}, {}, {});
+
+    Ptr<NullStreamIdentificationFunction> sif2 = CreateObject<NullStreamIdentificationFunction>();
+    uint16_t streamHandle2 = 20;
+    sif2->SetAttribute("VlanID", UintegerValue(110));
+    sif2->SetAttribute("Address", AddressValue(macDest));
+    nSw1->AddStreamIdentificationFunction(streamHandle2, sif2, {netSw1_1}, {}, {}, {});
 
     // Configure ATS Engine on Switch Egress Port (Port 2)
     netSw1_2->SetAttribute("isAtsEnabled", BooleanValue(true));

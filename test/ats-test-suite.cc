@@ -3,6 +3,7 @@
 #include "ns3/ethernet-channel.h"
 #include "ns3/ethernet-header2.h"
 #include "ns3/ethernet-generator.h"
+#include "ns3/stream-identification-function-null.h"
 
 // An essential include is test.h
 #include "ns3/test.h"
@@ -634,6 +635,13 @@ void AtsBridgeTransitTestCase::DoRun()
     // Set Bridging Rule for VLAN 100
     sw1->AddForwardingTableEntry(Mac48Address("ff:ff:ff:ff:ff:ff"), 100, {netSw1_2});
 
+    // Stream Identification
+    Ptr<NullStreamIdentificationFunction> sif0 = CreateObject<NullStreamIdentificationFunction>();
+    uint16_t StreamHandle = 10;
+    sif0->SetAttribute("VlanID", UintegerValue(100));
+    sif0->SetAttribute("Address", AddressValue(Mac48Address("ff:ff:ff:ff:ff:ff")));
+    nSw1->AddStreamIdentificationFunction(StreamHandle, sif0, {netSw1_1}, {}, {}, {});
+
     // Configure ATS Engine on Switch Egress Port
     netSw1_2->SetAttribute("isAtsEnabled", BooleanValue(true));
     Ptr<Ats> atsEngine = netSw1_2->GetAts();
@@ -771,6 +779,19 @@ void AtsBridgeMultiplexingTestCase::DoRun()
     sw1->AddForwardingTableEntry(macDest, 100, {netSw1_2});
     sw1->AddForwardingTableEntry(macDest, 110, {netSw1_2});
 
+    // Stream identification
+    Ptr<NullStreamIdentificationFunction> sif1 = CreateObject<NullStreamIdentificationFunction>();
+    uint16_t streamHandle1 = 10;
+    sif1->SetAttribute("VlanID", UintegerValue(100));
+    sif1->SetAttribute("Address", AddressValue(macDest));
+    nSw1->AddStreamIdentificationFunction(streamHandle1, sif1, {netSw1_1}, {}, {}, {});
+
+    Ptr<NullStreamIdentificationFunction> sif2 = CreateObject<NullStreamIdentificationFunction>();
+    uint16_t streamHandle2 = 20;
+    sif2->SetAttribute("VlanID", UintegerValue(110));
+    sif2->SetAttribute("Address", AddressValue(macDest));
+    nSw1->AddStreamIdentificationFunction(streamHandle2, sif2, {netSw1_1}, {}, {}, {});
+
     netSw1_2->SetAttribute("isAtsEnabled", BooleanValue(true));
     Ptr<Ats> atsEngine = netSw1_2->GetAts();
     atsEngine->SetClock(clockSw1);
@@ -905,6 +926,13 @@ void AtsBridgePcpPriorityTestCase::DoRun()
     }
 
     sw1->AddForwardingTableEntry(macDest, 100, {netSw1_2});
+
+    // Stream identification
+    Ptr<NullStreamIdentificationFunction> sif1 = CreateObject<NullStreamIdentificationFunction>();
+    uint16_t streamHandle1 = 10;
+    sif1->SetAttribute("VlanID", UintegerValue(100));
+    sif1->SetAttribute("Address", AddressValue(macDest));
+    nSw1->AddStreamIdentificationFunction(streamHandle1, sif1, {netSw1_1}, {}, {}, {});
 
     netSw1_2->SetAttribute("isAtsEnabled", BooleanValue(true));
     Ptr<Ats> atsEngine = netSw1_2->GetAts();
@@ -1060,6 +1088,19 @@ void AtsBridgeIngressIsolationTestCase::DoRun()
     }
 
     sw1->AddForwardingTableEntry(macDest, 100, {netSw1_3});
+
+    // Stream identification
+    Ptr<NullStreamIdentificationFunction> sif1 = CreateObject<NullStreamIdentificationFunction>();
+    uint16_t streamHandle1 = 10;
+    sif1->SetAttribute("VlanID", UintegerValue(100));
+    sif1->SetAttribute("Address", AddressValue(macDest));
+    nSw1->AddStreamIdentificationFunction(streamHandle1, sif1, {netSw1_1}, {}, {}, {});
+
+    Ptr<NullStreamIdentificationFunction> sif2 = CreateObject<NullStreamIdentificationFunction>();
+    uint16_t streamHandle2 = 20;
+    sif2->SetAttribute("VlanID", UintegerValue(100));
+    sif2->SetAttribute("Address", AddressValue(macDest));
+    nSw1->AddStreamIdentificationFunction(streamHandle2, sif2, {netSw1_2}, {}, {}, {});
 
     netSw1_3->SetAttribute("isAtsEnabled", BooleanValue(true));
     Ptr<Ats> atsEngine = netSw1_3->GetAts();

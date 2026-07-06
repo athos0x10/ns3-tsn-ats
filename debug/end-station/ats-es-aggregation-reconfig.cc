@@ -81,10 +81,7 @@ int main(int argc, char *argv[])
     uint32_t sharedInstId = esGroup->CreateAtsInstance(DataRate("8Mbps"), 16384);
 
     // Bind our expected stream configuration to this explicit instance
-    AtsSchedulerGroup::StreamKey sharedKey;
-    sharedKey.vlanId = vlanId;
-    sharedKey.destMac = destMac;
-    esGroup->BindStreamToInstance(sharedKey, sharedInstId);
+    esGroup->BindStreamToInstanceES(destMac, vlanId, sharedInstId);
 
     // Application 1: (VLAN 100, PCP 4)
     Ptr<EthernetGenerator>
