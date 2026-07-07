@@ -4,27 +4,22 @@
 #include "ns3/simulator.h"
 #include "ns3/node.h"
 #include "ns3/drop-tail-queue.h"
-#include <bitset>
 
 #include "ns3/ethernet-channel.h"
-#include "ns3/core-module.h"
 #include "ns3/network-module.h"
 #include "ns3/tsn-module.h"
-#include "ns3/drop-tail-queue.h"
 #include "ns3/ethernet-generator.h"
 
 /**
  * \file
  *
- * Example of the use of tsn-node.cc tsn-net-device.cc ethernet-channel.cc
- * on a network composed of two end-stations connected by a 100Mb/s
- * full duplex link with TAS on ES1 port
- *  ES1 ====== ES2
+ * Example demonstrating the use of the explicit End-Station ATS API
+ * on a point-to-point network topology: ES1 ===== ES2
  */
 
 using namespace ns3;
 
-NS_LOG_COMPONENT_DEFINE("Example");
+NS_LOG_COMPONENT_DEFINE("AtsEsModelExample");
 
 // A callback to log the pkt reception
 static void
@@ -43,10 +38,9 @@ PhyTxCallback(std::string context, Ptr<const Packet> p)
 int main(int argc, char *argv[])
 {
     // Enable logging
-    LogComponentEnable("Example", LOG_LEVEL_INFO);
+    LogComponentEnable("AtsEsModelExample", LOG_LEVEL_INFO);
     LogComponentEnable("AtsSchedulerGroup", LOG_LEVEL_DEBUG);
     LogComponentEnable("EthernetGenerator", LOG_LEVEL_INFO);
-    LogComponentEnable("Clock", LOG_LEVEL_INFO);
 
     CommandLine cmd(__FILE__);
     cmd.Parse(argc, argv);
@@ -78,9 +72,11 @@ int main(int argc, char *argv[])
     net0->Attach(channel);
     net1->Attach(channel);
 
-    // Allocate a Mac address
-    net0->SetAddress(Mac48Address::Allocate());
-    net1->SetAddress(Mac48Address::Allocate());
+    // Allocate MAC addresses
+    Mac48Address macSrc = Mac48Address::Allocate();
+    Mac48Address macDest = Mac48Address::Allocate();
+    net0->SetAddress(macSrc);
+    net1->SetAddress(macDest);
 
     // Create and add eight FIFO on each net device
     for (int i = 0; i < 8; i++)
@@ -95,14 +91,27 @@ int main(int argc, char *argv[])
     atsEngine->SetClock(clock0);
     atsEngine->SetAttribute("MaxResidenceTime", TimeValue(Seconds(1)));
 
+    // Define context identifiers
+    uint16_t vlanId = 100;
+
+    // Fetch the dedicated End-Station scheduler group using the MAC/VLAN abstraction
+    Ptr<AtsSchedulerGroup> esGroup = atsEngine->GetGroupForEndStation(macDest, vlanId, net0);
+
+    // Create an explicit token bucket instance with custom shaping parameters (e.g., 20 Mbps)
+    uint32_t esInstanceId = esGroup->CreateAtsInstance(DataRate("20Mbps"), 16384);
+
+    // Bind this specific stream profile to our explicit instance
+    esGroup->BindStreamToInstanceES(macDest, vlanId, esInstanceId);
+
     // Application description
     Ptr<EthernetGenerator> app0 = CreateObject<EthernetGenerator>();
     app0->Setup(net0);
+    app0->SetAttribute("Address", AddressValue(macDest)); // Added missing destination MAC address
     app0->SetAttribute("BurstSize", UintegerValue(1));
     app0->SetAttribute("PayloadSize", UintegerValue(1400));
     app0->SetAttribute("Period", TimeValue(MilliSeconds(15)));
     app0->SetAttribute("PCP", UintegerValue(1));
-    app0->SetAttribute("VlanID", UintegerValue(100));
+    app0->SetAttribute("VlanID", UintegerValue(vlanId));
     n0->AddApplication(app0);
     app0->SetStartTime(Seconds(0));
     app0->SetStopTime(Seconds(4));
