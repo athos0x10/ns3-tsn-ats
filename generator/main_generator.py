@@ -4,6 +4,7 @@ import os
 import re
 
 from topology_generator import simulation_generate_topology
+from routes_generator import simulation_generate_routes
 
 def simulation_initialisation(simulation_name):
     """Create or Overwrite the simulation file, write Doxygen headers, includes,
@@ -102,8 +103,9 @@ if __name__ == "__main__":
         "-c",
         "--config",
         type=str,
+        nargs="+",
         required=True,
-        help="Path to the JSON topology configuration file (e.g., topology.json)",
+        help="List of JSON configuration files (e.g., topology.json routes.json)",
     )
 
     args = parser.parse_args()
@@ -117,8 +119,13 @@ if __name__ == "__main__":
     simulation_start_main(meta_data, enable_tracing=True)
 
     # Call the imported topology generator to inject the JSON network
-    simulation_generate_topology(meta_data, args.config)
+    if len(args.config) >= 1:
+        simulation_generate_topology(meta_data, args.config[0])
 
+    # Call the imported routes generator to inject the JSON routes
+    if len(args.config) >= 2:
+        simulation_generate_routes(meta_data, args.config[1])
+        
     # Finalize the runtime lifecycle
     simulation_close_main(meta_data)
 
