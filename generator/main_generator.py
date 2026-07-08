@@ -3,6 +3,7 @@ from datetime import datetime
 import os
 import re
 
+from topology_generator import simulation_generate_topology
 
 def simulation_initialisation(simulation_name):
     """Create or Overwrite the simulation file, write Doxygen headers, includes,
@@ -61,13 +62,6 @@ def simulation_start_main(meta, enable_tracing=True):
     with open(simulation_path, "a", encoding="utf-8") as file:
         file.write("int main(int argc, char* argv[])\n{\n")
 
-        # Command line parameter support inside NS-3 binary
-        file.write("  CommandLine cmd;\n")
-        file.write("  cmd.Parse(argc, argv);\n\n")
-
-        # Set time resolution to nanoseconds (crucial for TSN/Ethernet)
-        file.write("  Time::SetResolution(Time::NS);\n\n")
-
         if enable_tracing:
             file.write("  // --- Logging and Tracing Configuration ---\n")
             file.write(
@@ -104,6 +98,14 @@ if __name__ == "__main__":
         help="Name of the simulation scenario (e.g., TrafficSimulationTest)",
     )
 
+    parser.add_argument(
+        "-c",
+        "--config",
+        type=str,
+        required=True,
+        help="Path to the JSON topology configuration file (e.g., topology.json)",
+    )
+
     args = parser.parse_args()
 
     print(f"Executing generation flow for scenario: {args.name}")
@@ -113,6 +115,9 @@ if __name__ == "__main__":
 
     # Start the execution block and telemetry options
     simulation_start_main(meta_data, enable_tracing=True)
+
+    # Call the imported topology generator to inject the JSON network
+    simulation_generate_topology(meta_data, args.config)
 
     # Finalize the runtime lifecycle
     simulation_close_main(meta_data)
