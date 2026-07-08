@@ -5,6 +5,7 @@ import re
 
 from topology_generator import simulation_generate_topology
 from routes_generator import simulation_generate_routes
+from streams_generator import simulation_generate_streams
 
 def simulation_initialisation(simulation_name):
     """Create or Overwrite the simulation file, write Doxygen headers, includes,
@@ -105,7 +106,21 @@ if __name__ == "__main__":
         type=str,
         nargs="+",
         required=True,
-        help="List of JSON configuration files (e.g., topology.json routes.json)",
+        help="List of JSON configuration files (topology.json routes.json streams.json)",
+    )
+
+    parser.add_argument(
+        "--start",
+        type=float,
+        default=1.0,
+        help="Start time for applications in seconds (default: 1.0)",
+    )
+    
+    parser.add_argument(
+        "--stop",
+        type=float,
+        default=10.0,
+        help="Stop time for applications in seconds (default: 10.0)",
     )
 
     args = parser.parse_args()
@@ -125,7 +140,11 @@ if __name__ == "__main__":
     # Call the imported routes generator to inject the JSON routes
     if len(args.config) >= 2:
         simulation_generate_routes(meta_data, args.config[1])
-        
+
+    # Call the imported streams generator to inject the JSON streams
+    if len(args.config) >= 3 :
+        simulation_generate_streams(meta_data, args.config[2], start_time=args.start, stop_time=args.stop)
+
     # Finalize the runtime lifecycle
     simulation_close_main(meta_data)
 
