@@ -42,7 +42,7 @@ namespace ns3
                 .AddTraceSource("EligibilityTime",
                                 "ATS evaluated eligibility time for a packet",
                                 MakeTraceSourceAccessor(&AtsSchedulerGroup::m_eligibilityTimeTrace),
-                                "ns3::TracedCallback::Time");
+                                "ns3::TracedCallback::Ptr<const Packet>::Time");
 
         return tid;
     }
@@ -187,7 +187,7 @@ namespace ns3
         Time eligibilityTime = Max(currentTime, Max(m_groupEligibilityTime, schedulerEligibilityTime));
         Time residenceDelay = eligibilityTime - arrivalTime;
 
-        m_eligibilityTimeTrace(eligibilityTime);
+        m_eligibilityTimeTrace(packet, eligibilityTime);
 
         // --- ATS DEBUG LOGS ---
         NS_LOG_DEBUG("[ATS-DEBUG] Packet UID: " << packet->GetUid()

@@ -161,7 +161,7 @@ namespace ns3
 
         Ptr<TsnNetDevice> m_netDevice;
         Ptr<Ats> m_ats;
-        TracedCallback<Time> m_eligibilityTimeTrace;
+        TracedCallback<Ptr<const Packet>, Time> m_eligibilityTimeTrace;
     };
 
 } // namespace ns3
