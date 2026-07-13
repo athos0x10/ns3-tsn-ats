@@ -5,6 +5,7 @@
 #include "ns3/nstime.h"
 #include "ns3/uinteger.h"
 #include "ns3/data-rate.h"
+#include "ns3/traced-callback.h"
 #include "ns3/ats-scheduler-instance.h"
 #include "ns3/tsn-net-device.h"
 #include "ns3/packet.h"
@@ -160,6 +161,7 @@ namespace ns3
 
         Ptr<TsnNetDevice> m_netDevice;
         Ptr<Ats> m_ats;
+        TracedCallback<Time> m_eligibilityTimeTrace;
     };
 
 } // namespace ns3

@@ -35,7 +35,12 @@ namespace ns3
                               "The committed burst size (CBS) in bits.",
                               UintegerValue(12288), // Default to 12KB
                               MakeUintegerAccessor(&AtsSchedulerInstance::m_committedBurstSize),
-                              MakeUintegerChecker<uint32_t>());
+                              MakeUintegerChecker<uint32_t>())
+                .AddTraceSource("Tokens",
+                                "Current ATS bucket token level in bits",
+                                MakeTraceSourceAccessor(&AtsSchedulerInstance::m_tokensTrace),
+                                "ns3::TracedValueCallback::double");
+        ;
         return tid;
     }
 
@@ -48,6 +53,33 @@ namespace ns3
     AtsSchedulerInstance::~AtsSchedulerInstance()
     {
         NS_LOG_FUNCTION(this);
+    }
+
+    void
+    AtsSchedulerInstance::TraceTokens(Time currentTime)
+    {
+        // The bucket is full at m_committedBurstSize (CBS).
+        // Consumed tokens correspond to the remaining time needed for the bucket to empty.
+        double cbs = static_cast<double>(m_committedBurstSize);
+        double cir = m_committedInformationRate.GetBitRate();
+
+        if (currentTime >= m_bucketEmptyTime)
+        {
+            // The bucket is completely empty (meaning it is full of tokens/capacity available)
+            m_tokensTrace(cbs);
+        }
+        else
+        {
+            // The remaining time before m_bucketEmptyTime represents the missing consumed bits
+            double missingBits = (m_bucketEmptyTime - currentTime).GetSeconds() * cir;
+            double currentTokens = cbs - missingBits;
+
+            // Safety check against negative values due to rounding errors
+            if (currentTokens < 0)
+                currentTokens = 0;
+
+            m_tokensTrace(currentTokens);
+        }
     }
 
 } // namespace ns3

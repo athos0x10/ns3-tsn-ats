@@ -5,6 +5,7 @@
 #include "ns3/nstime.h"
 #include "ns3/uinteger.h"
 #include "ns3/data-rate.h"
+#include "ns3/traced-callback.h"
 
 namespace ns3
 {
@@ -43,6 +44,8 @@ namespace ns3
         uint32_t GetSchedulerIdentifier() const { return m_schedulerIdentifier; }
         uint32_t GetSchedulerGroupIdentifier() const { return m_schedulerGroupIdentifier; }
 
+        void TraceTokens(Time currentTime);
+
     private:
         // Identification attributes
         uint32_t m_schedulerIdentifier;
@@ -52,6 +55,7 @@ namespace ns3
         DataRate m_committedInformationRate;
         uint32_t m_committedBurstSize;
         Time m_bucketEmptyTime;
+        TracedCallback<double> m_tokensTrace;
     };
 
 } // namespace ns3

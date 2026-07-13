@@ -38,7 +38,12 @@ namespace ns3
                               "The default Committed Burst Size (CBS) in bits for dynamic instance creation.",
                               UintegerValue(16384), // Default to 2048 bytes (16384 bits)
                               MakeUintegerAccessor(&AtsSchedulerGroup::m_defaultCbs),
-                              MakeUintegerChecker<uint32_t>());
+                              MakeUintegerChecker<uint32_t>())
+                .AddTraceSource("EligibilityTime",
+                                "ATS evaluated eligibility time for a packet",
+                                MakeTraceSourceAccessor(&AtsSchedulerGroup::m_eligibilityTimeTrace),
+                                "ns3::TracedCallback::Time");
+
         return tid;
     }
 
@@ -182,6 +187,8 @@ namespace ns3
         Time eligibilityTime = Max(currentTime, Max(m_groupEligibilityTime, schedulerEligibilityTime));
         Time residenceDelay = eligibilityTime - arrivalTime;
 
+        m_eligibilityTimeTrace(eligibilityTime);
+
         // --- ATS DEBUG LOGS ---
         NS_LOG_DEBUG("[ATS-DEBUG] Packet UID: " << packet->GetUid()
                                                 << " | Size: " << packet->GetSize() << " Bytes (" << sizeBits << " bits)"
@@ -203,6 +210,8 @@ namespace ns3
             m_groupEligibilityTime = eligibilityTime;
             Time newBucketEmptyTime = (eligibilityTime < bucketFullTime) ? schedulerEligibilityTime : (schedulerEligibilityTime + eligibilityTime - bucketFullTime);
             instance->SetBucketEmptyTime(newBucketEmptyTime);
+
+            instance->TraceTokens(currentTime);
 
             // Create AtsPacketInfo and insert it in the calendar queue
             AtsPacketInfo packetInfo;
