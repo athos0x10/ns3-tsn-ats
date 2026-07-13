@@ -29,6 +29,9 @@ int main(int argc, char *argv[])
 
     // Creation of the nodes
     // --- Switches ---
+
+    // Create the node object and give a name.
+    // It can be either an end-station or a switch
     Ptr<TsnNode> n0 = CreateObject<TsnNode>();
     Names::Add("SW0", n0);
 
@@ -68,6 +71,11 @@ int main(int argc, char *argv[])
 
     // Create and add a netDevice to each node
     // --- SW0 Ports ---
+
+    // A TsnNetDevice is a port for a TsnNode
+    // So we create the object, we associate it to a TsnNode
+    // And we give a name.
+    // It could have been done with a loop
     Ptr<TsnNetDevice> sw0_p0 = CreateObject<TsnNetDevice>();
     n0->AddDevice(sw0_p0);
     Names::Add("SW0#00", sw0_p0);
@@ -171,6 +179,10 @@ int main(int argc, char *argv[])
     // Switch device configuration
     // --- Creation and Configuration of SwitchNetDevices ---
     // SW0
+
+    // Now, we create specificaly a switch
+    // Some attributes are available you must attach a Node
+    // and give all the TsnNetDevice.
     Ptr<SwitchNetDevice> sw0 = CreateObject<SwitchNetDevice>();
     sw0->SetAttribute("MinForwardingLatency", TimeValue(MicroSeconds(2)));
     sw0->SetAttribute("MaxForwardingLatency", TimeValue(MicroSeconds(5)));
@@ -212,6 +224,8 @@ int main(int argc, char *argv[])
 
     // Data rate configuration
     // --- 1 Gbps Ports (Switches backbone) ---
+
+    // We could have done this before but I think it's clearer this way.
     sw0_p2->SetAttribute("DataRate", DataRateValue(DataRate("1Gbps")));
     sw2_p2->SetAttribute("DataRate", DataRateValue(DataRate("1Gbps")));
 
@@ -254,6 +268,8 @@ int main(int argc, char *argv[])
 
     // Create full-duplex channel
     // --- SW0 <-> SW2 (Delay: 44.775 us) ---
+
+    // This is where we create the link between two ports
     Ptr<EthernetChannel> ch_sw0_sw2 = CreateObject<EthernetChannel>();
     ch_sw0_sw2->SetAttribute("Delay", TimeValue(MicroSeconds(44.775)));
     sw0_p2->Attach(ch_sw0_sw2);
@@ -369,6 +385,7 @@ int main(int argc, char *argv[])
     // -------------------
 
     // FLOW 0 (ES7 -> ES3, ES6, ES2)
+    // For the forwarding table we give (destMac, VlanId, TsnNetDevice)
     sw1->AddForwardingTableEntry(esMacs[3], 1, std::vector<Ptr<NetDevice>>{sw1_p6});
     sw1->AddForwardingTableEntry(esMacs[6], 1, std::vector<Ptr<NetDevice>>{sw1_p7});
     sw1->AddForwardingTableEntry(esMacs[2], 1, std::vector<Ptr<NetDevice>>{sw1_p2});
@@ -400,6 +417,7 @@ int main(int argc, char *argv[])
     // ------------------
 
     // Application Container to hold all generators
+    // This container is convenient here because we do not specify a start time for each application.
     ApplicationContainer apps;
 
     // ==========================================
@@ -415,7 +433,7 @@ int main(int argc, char *argv[])
         app0->SetAttribute("PayloadSize", UintegerValue(58));
         app0->SetAttribute("Period", TimeValue(MicroSeconds(1000)));
         app0->SetAttribute("PCP", UintegerValue(7));
-        app0->SetAttribute("VlanID", UintegerValue(1)); // Optionnel : Ajouté pour correspondre à routes.json
+        app0->SetAttribute("VlanID", UintegerValue(1));
         es7->AddApplication(app0);
         apps.Add(app0);
     }
@@ -425,7 +443,7 @@ int main(int argc, char *argv[])
     // ISOCHRONOUS, PCP: 7, Size: 68B, Period: 2000us
     // ==========================================
     Ptr<EthernetGenerator> app1 = CreateObject<EthernetGenerator>();
-    app1->Setup(es4_p0);                                    // Calqué sur le modèle fonctionnel
+    app1->Setup(es4_p0);
     app1->SetAttribute("Address", AddressValue(esMacs[7])); // ES7
     app1->SetAttribute("PayloadSize", UintegerValue(68));
     app1->SetAttribute("Period", TimeValue(MicroSeconds(2000)));
@@ -439,7 +457,7 @@ int main(int argc, char *argv[])
     // ISOCHRONOUS, PCP: 7, Size: 64B, Period: 500us
     // ==========================================
     Ptr<EthernetGenerator> app2 = CreateObject<EthernetGenerator>();
-    app2->Setup(es3_p0);                                    // Calqué sur le modèle fonctionnel
+    app2->Setup(es3_p0);
     app2->SetAttribute("Address", AddressValue(esMacs[4])); // ES4
     app2->SetAttribute("PayloadSize", UintegerValue(64));
     app2->SetAttribute("Period", TimeValue(MicroSeconds(500)));
