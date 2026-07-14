@@ -79,6 +79,12 @@ PhyTxBeginCallback(std::string context, Ptr<const Packet> p)
     lastDepartureTime = now;
 }
 
+void AtsEligibilityCallback(Ptr<const Packet> p, Time eligibilityTime)
+{
+    uint64_t uid = p->GetUid();
+    packetTable[uid].eligibilityTime = eligibilityTime.GetSeconds();
+}
+
 void WritePacketMetricsToCsv()
 {
     for (auto const &[uid, info] : packetTable)
@@ -277,21 +283,26 @@ int main(int argc, char *argv[])
             ats_group->BindStreamToInstance(2, instanceId);
             ats_group->BindStreamToInstance(3, instanceId);
             ats_group->BindStreamToInstance(4, instanceId);
+            ats_group->TraceConnectWithoutContext("EligibilityTime", MakeCallback(&AtsEligibilityCallback));
         }
         else
         {
             Ptr<AtsSchedulerGroup> ats_group_p0 = ats->GetGroupForBridge(sw_p0, sw_p4, 0);
             ats_group_p0->SetAttribute("DefaultCir", DataRateValue(DataRate("30Mbps")));
             ats_group_p0->SetAttribute("DefaultCbs", UintegerValue(2000));
+            ats_group_p0->TraceConnectWithoutContext("EligibilityTime", MakeCallback(&AtsEligibilityCallback));
             Ptr<AtsSchedulerGroup> ats_group_p1 = ats->GetGroupForBridge(sw_p1, sw_p4, 0);
             ats_group_p1->SetAttribute("DefaultCir", DataRateValue(DataRate("30Mbps")));
             ats_group_p1->SetAttribute("DefaultCbs", UintegerValue(2000));
+            ats_group_p1->TraceConnectWithoutContext("EligibilityTime", MakeCallback(&AtsEligibilityCallback));
             Ptr<AtsSchedulerGroup> ats_group_p2 = ats->GetGroupForBridge(sw_p2, sw_p4, 0);
             ats_group_p2->SetAttribute("DefaultCir", DataRateValue(DataRate("30Mbps")));
             ats_group_p2->SetAttribute("DefaultCbs", UintegerValue(2000));
+            ats_group_p2->TraceConnectWithoutContext("EligibilityTime", MakeCallback(&AtsEligibilityCallback));
             Ptr<AtsSchedulerGroup> ats_group_p3 = ats->GetGroupForBridge(sw_p3, sw_p4, 0);
             ats_group_p3->SetAttribute("DefaultCir", DataRateValue(DataRate("30Mbps")));
             ats_group_p3->SetAttribute("DefaultCbs", UintegerValue(2000));
+            ats_group_p3->TraceConnectWithoutContext("EligibilityTime", MakeCallback(&AtsEligibilityCallback));
         }
     }
 
