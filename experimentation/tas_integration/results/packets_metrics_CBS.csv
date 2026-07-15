@@ -1,0 +1,5 @@
+Packet_UID,Arrival_Time,MacTx_Time,PhyTxBegin_Time,Queue_Delay,Eligibility_Time,Inter_Departure_Time
+0,0,3.218e-05,1,0.999968,-1,0
+1,0,5.9359e-05,1.00008,1.00002,-1,8.4e-05
+2,0,8.7004e-05,1.00017,1.00008,-1,8.4e-05
+3,0,0.000114485,1.00025,1.00014,-1,8.4e-05
