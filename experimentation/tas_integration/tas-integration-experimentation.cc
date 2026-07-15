@@ -214,7 +214,7 @@ int main(int argc, char *argv[])
         ats->SetClock(clock0);
         ats->SetAttribute("MaxResidenceTime", TimeValue(Seconds(1)));
 
-        Ptr<AtsSchedulerGroup> ats_group = ats->GetGroupForBridge(sw_p0, sw_p1, 0);
+        Ptr<AtsSchedulerGroup> ats_group = ats->GetGroupForBridge(sw_p0, sw_p1, 1);
         ats_group->SetAttribute("DefaultCir", DataRateValue(DataRate("40Mbps")));
         ats_group->SetAttribute("DefaultCbs", UintegerValue(3200));
 
