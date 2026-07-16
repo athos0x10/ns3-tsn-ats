@@ -212,6 +212,7 @@ int main(int argc, char *argv[])
         sw_p1->SetAttribute("isAtsEnabled", BooleanValue(true));
         Ptr<Ats> ats = sw_p1->GetAts();
         ats->SetClock(clock0);
+        ats->SetPriorityActivation(0, true);
         ats->SetAttribute("MaxResidenceTime", TimeValue(Seconds(1)));
 
         Ptr<AtsSchedulerGroup> ats_group = ats->GetGroupForBridge(sw_p0, sw_p1, 1);

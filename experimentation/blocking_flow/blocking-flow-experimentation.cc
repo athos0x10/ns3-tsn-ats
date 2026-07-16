@@ -243,19 +243,15 @@ int main(int argc, char *argv[])
     {
         sw_p2->SetAttribute("isAtsEnabled", BooleanValue(true));
         Ptr<Ats> ats = sw_p2->GetAts();
+        ats->SetPriorityActivation(0, true);
         ats->SetClock(clock0);
         ats->SetAttribute("MaxResidenceTime", TimeValue(Seconds(1)));
         // We assume that ES0 will be the flow blocked by the other.
         Ptr<AtsSchedulerGroup> ats_group_pcp0 = ats->GetGroupForBridge(sw_p0, sw_p2, 0);
         ats_group_pcp0->SetAttribute("DefaultCir", DataRateValue(DataRate("30Mbps")));
         ats_group_pcp0->SetAttribute("DefaultCbs", UintegerValue(3200));
-        // The blocking flow
-        Ptr<AtsSchedulerGroup> ats_group_pcp7 = ats->GetGroupForBridge(sw_p1, sw_p2, 7);
-        ats_group_pcp7->SetAttribute("DefaultCir", DataRateValue(DataRate("100Mbps")));
-        ats_group_pcp7->SetAttribute("DefaultCbs", UintegerValue(8000));
         // Tracing connection
         ats_group_pcp0->TraceConnectWithoutContext("EligibilityTime", MakeCallback(&AtsEligibilityCallback));
-        ats_group_pcp7->TraceConnectWithoutContext("EligibilityTime", MakeCallback(&AtsEligibilityCallback));
     }
 
     // Stream Identification
@@ -332,7 +328,7 @@ int main(int argc, char *argv[])
         app3->SetAttribute("Period", TimeValue(Seconds(1.0)));
         app3->SetAttribute("PCP", UintegerValue(0));
         es0->AddApplication(app3);
-        app3->SetStartTime(Seconds(1.00013667));
+        app3->SetStartTime(Seconds(1.00018667));
         app3->SetStopTime(Seconds(1.1));
     }
 

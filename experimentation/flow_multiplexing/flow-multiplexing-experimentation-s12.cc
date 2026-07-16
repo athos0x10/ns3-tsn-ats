@@ -269,6 +269,7 @@ int main(int argc, char *argv[])
     {
         sw_p4->SetAttribute("isAtsEnabled", BooleanValue(true));
         Ptr<Ats> ats = sw_p4->GetAts();
+        ats->SetPriorityActivation(0, true);
         ats->SetAttribute("MaxResidenceTime", TimeValue(Seconds(1)));
         ats->SetClock(clock0);
         sw_p4->SetQueue(CreateObject<DropTailQueue<Packet>>());
