@@ -85,6 +85,7 @@ int main(int argc, char *argv[])
     net0->SetAttribute("isAtsEnabled", BooleanValue(true));
     Ptr<Ats> ats = net0->GetAts();
     ats->SetClock(clock0);
+    ats->SetPriorityActivation(5, true);
     ats->SetAttribute("MaxResidenceTime", TimeValue(MilliSeconds(1)));
 
     net1->TraceConnectWithoutContext("MacRx", MakeCallback(&RecordRxTraffic));

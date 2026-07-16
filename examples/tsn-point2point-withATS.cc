@@ -96,6 +96,7 @@ int main(int argc, char *argv[])
 
     // Fetch the dedicated End-Station scheduler group using the MAC/VLAN abstraction
     Ptr<AtsSchedulerGroup> esGroup = atsEngine->GetGroupForEndStation(macDest, vlanId, net0);
+    atsEngine->SetPriorityActivation(1, true);
 
     // Create an explicit token bucket instance with custom shaping parameters (e.g., 20 Mbps)
     uint32_t esInstanceId = esGroup->CreateAtsInstance(DataRate("20Mbps"), 16384);

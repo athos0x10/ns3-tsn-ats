@@ -192,6 +192,7 @@ int main(int argc, char *argv[])
     netSw1_3->SetAttribute("isAtsEnabled", BooleanValue(true));
     Ptr<Ats> atsEngine = netSw1_3->GetAts();
     atsEngine->SetClock(clockSw1);
+    atsEngine->SetPriorityActivation(3, true);
     atsEngine->SetAttribute("MaxResidenceTime", TimeValue(MilliSeconds(20)));
 
     // Connect Listener

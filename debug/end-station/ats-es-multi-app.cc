@@ -110,6 +110,7 @@ int main(int argc, char *argv[])
     txDevice->SetAttribute("isAtsEnabled", BooleanValue(true));
     Ptr<Ats> atsEngine = txDevice->GetAts();
     atsEngine->SetClock(srcClock);
+    atsEngine->SetPriorityActivation(0, true);
     atsEngine->SetAttribute("MaxResidenceTime", TimeValue(MilliSeconds(5)));
 
     // Application 1

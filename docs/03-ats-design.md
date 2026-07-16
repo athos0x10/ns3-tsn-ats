@@ -99,7 +99,11 @@ To safely interact with this architecture without manipulating raw map indices o
 *Allocates a customized shaping rate inside a specific group.*
 * **Stream Binding (IEEE 802.1CB)**: `bool BindStreamToInstance(uint32_t streamHandle, uint32_t instanceId);`
 *Binds a recognized 802.1CB `streamHandle` directly to an explicit token bucket instance to enforce shared or isolated shaping.*
-
+* **Priority Activation Control (ATS Bypass)**: 
+  * `void Ats::SetPriorityActivation(uint8_t priority, bool activated);`
+    *Enables (`true`) or disables (`false`) ATS shaping for a specific Priority Code Point (PCP). By default, all priorities are initialized to `false`, allowing specified traffic classes to bypass the ATS scheduler entirely and be queued directly.*
+  * `bool Ats::IsPriorityActivated(uint8_t priority) const;`
+    *Helper method used during frame enqueueing to verify if the frame's PCP is actively shaped by the ATS subsystem.*
 ---
 
 ## ATS for End-Stations
@@ -172,3 +176,8 @@ To safely interact with this architecture without manipulating raw map indices o
 *Allocates a customized shaping rate inside the specific stream group.*
 * **Stream Aggregation (End-Station)**: `void BindStreamToInstanceES(Mac48Address destMac, uint16_t vlanId, uint32_t instanceId);`
 *Forces multiple local application profiles onto a single shared End-Station token bucket instance based on their target L2 identification context.*
+* **Priority Activation Control (ATS Bypass)**: 
+  * `void Ats::SetPriorityActivation(uint8_t priority, bool activated);`
+    *Enables (`true`) or disables (`false`) ATS shaping for a specific Priority Code Point (PCP). By default, all priorities are initialized to `false`, allowing specified traffic classes to bypass the ATS scheduler entirely and be queued directly.*
+  * `bool Ats::IsPriorityActivated(uint8_t priority) const;`
+    *Helper method used during frame enqueueing to verify if the frame's PCP is actively shaped by the ATS subsystem.*

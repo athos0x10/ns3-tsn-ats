@@ -151,6 +151,7 @@ int main(int argc, char *argv[])
     netSw1_2->SetAttribute("isAtsEnabled", BooleanValue(true));
     Ptr<Ats> atsEngine = netSw1_2->GetAts();
     atsEngine->SetClock(clockSw1);
+    atsEngine->SetPriorityActivation(1, true);
     atsEngine->SetAttribute("MaxResidenceTime", TimeValue(MilliSeconds(20)));
 
     netDest->TraceConnectWithoutContext("MacRx", MakeBoundCallback(&MacRxCallback, "ESdest"));

@@ -147,6 +147,8 @@ int main(int argc, char *argv[])
     netSw1_2->SetAttribute("isAtsEnabled", BooleanValue(true));
     Ptr<Ats> atsEngine = netSw1_2->GetAts();
     atsEngine->SetClock(clockSw1);
+    atsEngine->SetPriorityActivation(2, true);
+    atsEngine->SetPriorityActivation(1, true);
     atsEngine->SetAttribute("MaxResidenceTime", TimeValue(MilliSeconds(20))); // Enough head-room for multiple streams
 
     netDest->TraceConnectWithoutContext("MacRx", MakeBoundCallback(&MacRxCallback, "ESdest"));

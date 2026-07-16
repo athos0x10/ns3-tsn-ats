@@ -89,6 +89,7 @@ int main(int argc, char *argv[])
 
     swPort2->SetAttribute("isAtsEnabled", BooleanValue(true));
     Ptr<Ats> swAtsEngine = swPort2->GetAts();
+    swAtsEngine->SetPriorityActivation(priority, true);
 
     uint8_t priority = 6;
 

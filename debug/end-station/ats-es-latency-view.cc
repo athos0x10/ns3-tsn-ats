@@ -130,6 +130,7 @@ int main(int argc, char *argv[])
     txDevice->SetAttribute("isAtsEnabled", BooleanValue(true));
     Ptr<Ats> atsEngine = txDevice->GetAts();
     atsEngine->SetClock(srcClock);
+    atsEngine->SetPriorityActivation(0, true);
     atsEngine->SetAttribute("MaxResidenceTime", TimeValue(MilliSeconds(10))); // Large ceiling to prevent drops
 
     // Hooking the measurement callback onto the destination MAC receive trace

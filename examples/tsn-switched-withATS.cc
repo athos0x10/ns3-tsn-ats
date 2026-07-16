@@ -118,6 +118,7 @@ int main(int argc, char *argv[])
     net2_1->SetAttribute("isAtsEnabled", BooleanValue(true));
     Ptr<Ats> ats = net2_1->GetAts();
     ats->SetClock(clock2);
+    ats->SetPriorityActivation(2, true);
     ats->SetAttribute("MaxResidenceTime", TimeValue(Seconds(1)));
 
     Ptr<AtsSchedulerGroup> ats_group = ats->GetGroupForBridge(net2_0, net2_1, 2);

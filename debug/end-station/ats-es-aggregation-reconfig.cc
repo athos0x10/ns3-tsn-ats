@@ -71,6 +71,7 @@ int main(int argc, char *argv[])
         << std::endl;
 
     Ptr<AtsSchedulerGroup> esGroup = atsEngine->GetGroupForEndStation(destMac, vlanId, netSource);
+    atsEngine->SetPriorityActivation(pcpPriority, true);
 
     // Modify the default factory properties of this specific group if dynamic instances spawn
     esGroup->SetAttribute("DefaultCir", DataRateValue(DataRate("15Mbps")));
