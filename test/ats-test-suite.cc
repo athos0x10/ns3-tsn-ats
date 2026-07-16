@@ -99,6 +99,7 @@ void AtsBasicTestCase::DoRun()
     NS_TEST_ASSERT_MSG_NE(ats, nullptr, "ATS Object inside TsnNetDevice should not be null");
 
     ats->SetClock(clock0);
+    ats->SetPriorityActivation(m_pcp, true);
 
     Ptr<EthernetGenerator> app0 = CreateObject<EthernetGenerator>();
     app0->Setup(net0);
@@ -203,6 +204,7 @@ void AtsPolicingDropTestCase::DoRun()
     // ATS Core setup
     net0->SetAttribute("isAtsEnabled", BooleanValue(true));
     Ptr<Ats> ats = net0->GetAts();
+    ats->SetPriorityActivation(m_pcp, true);
     NS_TEST_ASSERT_MSG_NE(ats, nullptr, "ATS Object inside TsnNetDevice should not be null");
 
     ats->SetClock(clock0);
@@ -294,6 +296,7 @@ void AtsMultiAppIsolationTestCase::DoRun()
 
     net0->SetAttribute("isAtsEnabled", BooleanValue(true));
     Ptr<Ats> ats = net0->GetAts();
+    ats->SetPriorityActivation(0, true);
     ats->SetClock(clock0);
     ats->SetAttribute("MaxResidenceTime", TimeValue(MilliSeconds(5)));
 
@@ -393,6 +396,7 @@ void AtsShapingLatencyTestCase::DoRun()
     // Activation of ATS on the emmiter
     net0->SetAttribute("isAtsEnabled", BooleanValue(true));
     Ptr<Ats> ats = net0->GetAts();
+    ats->SetPriorityActivation(0, true);
     ats->SetClock(clock0);
     ats->SetAttribute("MaxResidenceTime", TimeValue(MilliSeconds(10)));
 
@@ -494,6 +498,7 @@ void AtsNoisyNeighborIsolationTestCase::DoRun()
 
     net0->SetAttribute("isAtsEnabled", BooleanValue(true));
     Ptr<Ats> ats = net0->GetAts();
+    ats->SetPriorityActivation(5, true);
     ats->SetClock(clock0);
     ats->SetAttribute("MaxResidenceTime", TimeValue(MilliSeconds(1)));
 
@@ -645,6 +650,7 @@ void AtsBridgeTransitTestCase::DoRun()
     // Configure ATS Engine on Switch Egress Port
     netSw1_2->SetAttribute("isAtsEnabled", BooleanValue(true));
     Ptr<Ats> atsEngine = netSw1_2->GetAts();
+    atsEngine->SetPriorityActivation(1, true);
     NS_TEST_ASSERT_MSG_NE(atsEngine, nullptr, "ATS Engine must be successfully instantiated on SW port 2");
     atsEngine->SetClock(clockSw1);
     atsEngine->SetAttribute("MaxResidenceTime", TimeValue(MilliSeconds(5)));
@@ -794,6 +800,7 @@ void AtsBridgeMultiplexingTestCase::DoRun()
 
     netSw1_2->SetAttribute("isAtsEnabled", BooleanValue(true));
     Ptr<Ats> atsEngine = netSw1_2->GetAts();
+    atsEngine->SetPriorityActivation(1, true);
     atsEngine->SetClock(clockSw1);
     atsEngine->SetAttribute("MaxResidenceTime", TimeValue(MilliSeconds(20)));
 
@@ -938,6 +945,8 @@ void AtsBridgePcpPriorityTestCase::DoRun()
     Ptr<Ats> atsEngine = netSw1_2->GetAts();
     atsEngine->SetClock(clockSw1);
     atsEngine->SetAttribute("MaxResidenceTime", TimeValue(MilliSeconds(20)));
+    atsEngine->SetPriorityActivation(2, true);
+    atsEngine->SetPriorityActivation(1, true);
 
     netDest->TraceConnectWithoutContext("MacRx", MakeCallback(&AtsBridgePcpPriorityTestCase::RecordRxTime, this));
 
@@ -1106,6 +1115,7 @@ void AtsBridgeIngressIsolationTestCase::DoRun()
     Ptr<Ats> atsEngine = netSw1_3->GetAts();
     atsEngine->SetClock(clockSw1);
     atsEngine->SetAttribute("MaxResidenceTime", TimeValue(MilliSeconds(20)));
+    atsEngine->SetPriorityActivation(3, true);
 
     netDest->TraceConnectWithoutContext("MacRx", MakeCallback(&AtsBridgeIngressIsolationTestCase::RecordRxTime, this));
 

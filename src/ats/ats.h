@@ -99,6 +99,20 @@ namespace ns3
          */
         Ptr<AtsSchedulerGroup> GetGroupForBridge(Ptr<TsnNetDevice> ingressDevice, Ptr<TsnNetDevice> egressDevice, uint8_t priority);
 
+        /**
+         * \brief Activation or desactivation of the ATS for a PCP value (0 to 7).
+         * \param priority The PCP (0 to 7)
+         * \param activated False to bypass ATS, else True.
+         */
+        void SetPriorityActivation(uint8_t priority, bool activated);
+
+        /**
+         * \brief Check if ATS is activated for a PCP.
+         * \param priority The PCP (0 to 7).
+         * \return True if activated, else False.
+         */
+        bool IsPriorityActivated(uint8_t priority) const;
+
         // Getters and Setters
         Ptr<Clock> GetClock() { return m_clock; }
         void SetClock(Ptr<Clock> clock) { m_clock = clock; }
@@ -129,6 +143,9 @@ namespace ns3
 
         // Pointer to the local clock
         Ptr<Clock> m_clock;
+
+        // Table of configuration for pcp
+        std::map<uint8_t, bool> m_priorityActivationMap;
 
         // Default maximum residence time
         Time m_defaultMaximumResidenceTime;

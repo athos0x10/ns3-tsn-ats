@@ -130,4 +130,22 @@ namespace ns3
         return targetGroup->ProcessFrame(packet, hardwareLatency, streamHandle);
     }
 
+    bool
+    Ats::IsPriorityActivated(uint8_t priority) const
+    {
+        auto it = m_priorityActivationMap.find(priority);
+        if (it != m_priorityActivationMap.end())
+        {
+            return it->second;
+        }
+        return false; // ATS is disabled by default
+    }
+
+    void
+    Ats::SetPriorityActivation(uint8_t priority, bool activated)
+    {
+        NS_LOG_FUNCTION(this << (uint32_t)priority << activated);
+        m_priorityActivationMap[priority] = activated;
+    }
+
 }
