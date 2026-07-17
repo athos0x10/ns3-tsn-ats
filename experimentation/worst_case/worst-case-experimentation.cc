@@ -21,15 +21,150 @@ using namespace ns3;
 
 NS_LOG_COMPONENT_DEFINE("WorstCaseExperimentation");
 
+// --- Structures and Global Variables for Tracing ---
+
+struct PacketRecord
+{
+    uint64_t uid;
+    double generationTime = -1.0;   // Time when packet is sent by ES3 (MacTx)
+    double eligibilityTime = -1.0;  // Time when packet becomes eligible in ATS
+    double transmissionTime = -1.0; // Time when physical transmission starts (PhyTxBegin)
+    double receptionTime = -1.0;    // Time when packet is received by ES7 (MacRx)
+    double endToEndDelay = -1.0;    // receptionTime - generationTime
+    double atsQueueingDelay = -1.0; // transmissionTime - eligibilityTime
+    double interDeparture = -1.0;   // Time between consecutive physical departures
+};
+
+std::map<uint64_t, PacketRecord> packetTable;
+double lastDepartureTime = -1.0;
+
+std::ofstream csvPackets;
+std::ofstream csvShaperMetric;
+
+// --- Optimized Tracing Callbacks ---
+
+/**
+ * @brief Callback when a packet is transmitted from the MAC layer (Source ES3).
+ */
+static void
+SourceMacTxCallback(std::string context, Ptr<const Packet> p)
+{
+    uint64_t uid = p->GetUid();
+    packetTable[uid].uid = uid;
+    packetTable[uid].generationTime = Simulator::Now().GetSeconds();
+
+    // NS_LOG_INFO(Simulator::Now().As(Time::S) << " \t" << context << " : Critical Pkt #" << uid << " generated/sent!");
+}
+
+/**
+ * @brief Callback when physical transmission starts (to catch precise departure and calculate delays).
+ */
+static void
+PhyTxBeginCallback(std::string context, Ptr<const Packet> p)
+{
+    uint64_t uid = p->GetUid();
+
+    // Only trace packets we already track (the critical flows)
+    if (packetTable.find(uid) != packetTable.end())
+    {
+        double now = Simulator::Now().GetSeconds();
+        packetTable[uid].transmissionTime = now;
+
+        // Calculate ATS queueing delay: transmissionTime - eligibilityTime
+        if (packetTable[uid].eligibilityTime > 0)
+        {
+            packetTable[uid].atsQueueingDelay = now - packetTable[uid].eligibilityTime;
+        }
+
+        // Calculate Inter-departure time
+        double interDeparture = (lastDepartureTime > 0) ? (now - lastDepartureTime) : 0.0;
+        packetTable[uid].interDeparture = interDeparture;
+        lastDepartureTime = now;
+    }
+}
+
+/**
+ * @brief Callback triggered when ATS determines a packet's eligibility time.
+ */
+void AtsEligibilityCallback(Ptr<const Packet> p, Time eligibilityTime)
+{
+    uint64_t uid = p->GetUid();
+    if (packetTable.find(uid) != packetTable.end())
+    {
+        packetTable[uid].eligibilityTime = eligibilityTime.GetSeconds();
+    }
+}
+
+/**
+ * @brief Callback when a packet is received at the destination (ES7).
+ * Filters incoming traffic to only log packets coming from ES3.
+ */
+static void
+DestinationMacRxCallback(std::string context, Ptr<const Packet> p)
+{
+    // Extract Ethernet Header to verify the MAC Source
+    EthernetHeader2 header;
+    Ptr<Packet> packetCopy = p->Copy();
+    packetCopy->RemoveHeader(header);
+
+    Mac48Address expectedSrc("00:00:00:00:00:03"); // ES3 MAC address
+
+    if (header.GetSrc() == expectedSrc)
+    {
+        uint64_t uid = p->GetUid();
+        double now = Simulator::Now().GetSeconds();
+
+        packetTable[uid].receptionTime = now;
+
+        if (packetTable[uid].generationTime > 0)
+        {
+            packetTable[uid].endToEndDelay = now - packetTable[uid].generationTime;
+        }
+
+        // NS_LOG_INFO(Simulator::Now().As(Time::S) << " \t" << context << " : Critical Pkt #" << uid << " received at destination!");
+    }
+}
+
+/**
+ * @brief Writes the clean, non-virtual physical metrics into the CSV.
+ */
+void WritePacketMetricsToCsv()
+{
+    if (csvPackets.is_open())
+    {
+        // CSV Header
+        csvPackets << "Packet_UID,Generation_Time,Eligibility_Time,Transmission_Time,Reception_Time,End_To_End_Delay,ATS_Queueing_Delay,Inter_Departure\n";
+
+        for (auto const &[uid, info] : packetTable)
+        {
+            csvPackets << info.uid << ","
+                       << info.generationTime << ","
+                       << info.eligibilityTime << ","
+                       << info.transmissionTime << ","
+                       << info.receptionTime << ","
+                       << info.endToEndDelay << ","
+                       << info.atsQueueingDelay << ","
+                       << info.interDeparture << "\n";
+        }
+        csvPackets.close();
+    }
+
+    if (csvShaperMetric.is_open())
+    {
+        csvShaperMetric.close();
+    }
+}
+
 /**
  * @brief Automatically generates a random background flow on a source node.
  *
  * @param srcNode The source TSN End Station node (e.g., ES1, ES2, ES4, ES5)
  * @param srcDevice The network device associated with the source node's egress port
  * @param destNode The destination TSN End Station node (e.g., ES6, ES7)
- * @return double The generated throughput R_i of this flow in bits per second (bps)
+ * @param maxAllowedBps Maximum acceptable throughput to avoid saturating the link
+ * @return double The generated throughput R_i of this flow in bits per second (bps), or 0.0 if unable to fit
  */
-double CreateRandomBackgroundFlow(Ptr<TsnNode> srcNode, Ptr<TsnNetDevice> srcDevice, Ptr<TsnNode> destNode)
+double CreateRandomBackgroundFlow(Ptr<TsnNode> srcNode, Ptr<TsnNetDevice> srcDevice, Ptr<TsnNetDevice> destDevice, double maxAllowedBps)
 {
     static std::random_device rd;
     static std::mt19937 gen(rd());
@@ -37,30 +172,44 @@ double CreateRandomBackgroundFlow(Ptr<TsnNode> srcNode, Ptr<TsnNetDevice> srcDev
     std::uniform_int_distribution<int> dist_L(100, 1000);
     std::uniform_int_distribution<int> dist_priority(6, 7);
 
-    // Randomly select flow parameters
-    int Ni = dist_N(gen);
-    int Li = dist_L(gen);
-    int priority = dist_priority(gen);
+    int Ni;
+    int Li;
+    int priority;
+    double Ri_bps;
+    Time period;
+    Time jitter;
 
-    // Formula: T_IPG = Ni µs + U(0, Ni * 3µs)
-    Time period = MicroSeconds(2.5 * Ni);
-    Time jitter = MicroSeconds(1.5 * Ni);
+    int attempts = 0;
 
-    // Calculate theoretical throughput R_i (bps)
-    double Ri_bps = (Li * 8.0) / (2.5 * Ni * 1e-6);
+    do
+    {
+        Ni = dist_N(gen);
+        Li = dist_L(gen);
+        priority = dist_priority(gen);
 
-    // Instantiate and configure the EthernetGenerator
+        period = NanoSeconds(static_cast<int64_t>(2500 * Ni));
+        jitter = NanoSeconds(static_cast<int64_t>(1500 * Ni));
+
+        double averageIntervalSec = period.GetSeconds();
+        Ri_bps = (Li * 8.0) / averageIntervalSec;
+        attempts++;
+    } while (Ri_bps > maxAllowedBps && attempts < 100000);
+
+    if (Ri_bps > maxAllowedBps)
+    {
+        return 0.0;
+    }
+
     Ptr<EthernetGenerator> app = CreateObject<EthernetGenerator>();
     app->Setup(srcDevice);
-    app->SetAttribute("Address", Mac48AddressValue(destNode->GetAddress()));
+    app->SetAttribute("Address", AddressValue(Mac48Address::ConvertFrom(destDevice->GetAddress())));
     app->SetAttribute("PayloadSize", UintegerValue(Li));
     app->SetAttribute("BurstSize", UintegerValue(1));
     app->SetAttribute("Period", TimeValue(period));
     app->SetAttribute("Jitter", TimeValue(jitter));
     app->SetAttribute("PCP", UintegerValue(priority));
-    app->SetAttribute("VlanID", UintegerValue(100)); // Default VLAN for background traffic
+    app->SetAttribute("VlanID", UintegerValue(100));
 
-    // Bind the application to the source node
     srcNode->AddApplication(app);
     app->SetStartTime(Seconds(0.0));
 
@@ -80,6 +229,9 @@ int main(int argc, char *argv[])
     cmd.Parse(argc, argv);
 
     LogComponentEnable("WorstCaseExperimentation", LOG_LEVEL_INFO);
+
+    std::string packetCsvName = "packet_metrics_" + scenario + "_load_" + std::to_string(targetLoad) + ".csv";
+    csvPackets.open(packetCsvName);
 
     // Creation of the nodes
     Ptr<TsnNode> es1 = CreateObject<TsnNode>();
@@ -333,6 +485,10 @@ int main(int argc, char *argv[])
     ats_group_sw2->SetAttribute("DefaultCir", DataRateValue(selectedSchedulerRate));
     ats_group_sw2->SetAttribute("DefaultCbs", UintegerValue(selectedSchedulerCbs));
 
+    // Connect ATS Eligibility tracing
+    ats_sw1->TraceConnectWithoutContext("EligibilityTime", MakeCallback(&AtsEligibilityCallback));
+    ats_sw2->TraceConnectWithoutContext("EligibilityTime", MakeCallback(&AtsEligibilityCallback));
+
     // Generate random background flows for ES1, ES2, ES4, and ES5
     double linkCapacityBps = 100000000.0; // 100 Mbps
     double targetLoadBps = targetLoad * linkCapacityBps;
@@ -341,11 +497,21 @@ int main(int argc, char *argv[])
     double transitLinkLoadBps = 0.0;
     while (transitLinkLoadBps < targetLoadBps)
     {
-        transitLinkLoadBps += CreateRandomBackgroundFlow(es1, es1_p0, es6);
+        // remaining budget to not exceed targetLoadBps
+        double budget = targetLoadBps - transitLinkLoadBps;
+        double flow1 = CreateRandomBackgroundFlow(es1, es1_p0, es6_p0, budget);
+        if (flow1 == 0.0)
+            break; // Cannot add more traffic without exceeding budget
+        transitLinkLoadBps += flow1;
+
         if (transitLinkLoadBps >= targetLoadBps)
             break;
 
-        transitLinkLoadBps += CreateRandomBackgroundFlow(es2, es2_p0, es6);
+        budget = targetLoadBps - transitLinkLoadBps;
+        double flow2 = CreateRandomBackgroundFlow(es2, es2_p0, es6_p0, budget);
+        if (flow2 == 0.0)
+            break; // Cannot add more traffic without exceeding budget
+        transitLinkLoadBps += flow2;
     }
     NS_LOG_INFO("Transit Link (SW1->SW2) Background Load: " << (transitLinkLoadBps / 1e6) << " Mbps");
 
@@ -356,11 +522,20 @@ int main(int argc, char *argv[])
         double rxLinkLoadBps = 0.0;
         while (rxLinkLoadBps < targetLoadBps)
         {
-            rxLinkLoadBps += CreateRandomBackgroundFlow(es4, es4_p0, es7);
+            double budget = targetLoadBps - rxLinkLoadBps;
+            double flow1 = CreateRandomBackgroundFlow(es4, es4_p0, es7_p0, budget);
+            if (flow1 == 0.0)
+                break;
+            rxLinkLoadBps += flow1;
+
             if (rxLinkLoadBps >= targetLoadBps)
                 break;
 
-            rxLinkLoadBps += CreateRandomBackgroundFlow(es5, es5_p0, es7);
+            budget = targetLoadBps - rxLinkLoadBps;
+            double flow2 = CreateRandomBackgroundFlow(es5, es5_p0, es7_p0, budget);
+            if (flow2 == 0.0)
+                break;
+            rxLinkLoadBps += flow2;
         }
         NS_LOG_INFO("Rx Link (SW2->ES7) Background Load: " << (rxLinkLoadBps / 1e6) << " Mbps");
     }
@@ -368,7 +543,7 @@ int main(int argc, char *argv[])
     // ATS flow generation for the critical flow from ES1 to ES7
     Ptr<EthernetGenerator> atsApp = CreateObject<EthernetGenerator>();
     atsApp->Setup(es3_p0);
-    atsApp->SetAttribute("Address", Mac48AddressValue(es7_mac));
+    atsApp->SetAttribute("Address", AddressValue(es7_mac));
     atsApp->SetAttribute("PayloadSize", UintegerValue(478)); // 478B + 22B header = 500 Bytes Frame
     atsApp->SetAttribute("PCP", UintegerValue(5));
     atsApp->SetAttribute("VlanID", UintegerValue(100));
@@ -377,15 +552,15 @@ int main(int argc, char *argv[])
     if (scenario == "S1.1.1" || scenario == "S1.1.2" || scenario == "S1.2.1" || scenario == "S1.2.2")
     {
         // Purely periodic: period = 10µs, jitter = 0
+        NS_LOG_INFO("ATS Flow configured as purely periodic with period = 10µs and jitter = 0");
         atsApp->SetAttribute("Period", TimeValue(MicroSeconds(10)));
-        atsApp->SetAttribute("Jitter", TimeValue(MicroSeconds(0)));
         atsApp->SetAttribute("BurstSize", UintegerValue(1));
     }
     else if (scenario == "S1.1.3" || scenario == "S1.2.3")
     {
         // Sporadic: T_IPG = 10µs + U(0, 1µs) -> Mean = 10.5µs, Jitter = 0.5µs
-        atsApp->SetAttribute("Period", TimeValue(MicroSeconds(10.5)));
-        atsApp->SetAttribute("Jitter", TimeValue(MicroSeconds(0.5)));
+        atsApp->SetAttribute("Period", TimeValue(NanoSeconds(10500))); // 10.5 us
+        atsApp->SetAttribute("Jitter", TimeValue(NanoSeconds(500)));   // 0.5 us
         atsApp->SetAttribute("BurstSize", UintegerValue(1));
     }
     else if (scenario == "S1.1.4" || scenario == "S1.2.4")
@@ -403,9 +578,22 @@ int main(int argc, char *argv[])
     atsApp->SetStartTime(Seconds(0.0));
     es3->AddApplication(atsApp);
 
+    // --- Connect Physical & MAC Tracing for End-to-End Metrics ---
+
+    // Trace the source (ES3) MacTx to find out exactly when the host starts sending the packet
+    es3_p0->TraceConnect("MacTx", "ES3_Port0", MakeCallback(&SourceMacTxCallback));
+
+    // Trace physical departures on switches to match eligibility times and compute real queueing times
+    sw1_p3->TraceConnect("PhyTxBegin", "SW1_Port3", MakeCallback(&PhyTxBeginCallback));
+    sw2_p4->TraceConnect("PhyTxBegin", "SW2_Port4", MakeCallback(&PhyTxBeginCallback));
+
+    // Trace the destination (ES7) MacRx to register exact arrival time and compute E2E delay
+    es7_p0->TraceConnect("MacRx", "ES7_Port0", MakeCallback(&DestinationMacRxCallback));
+
     // Run the simulation for the specified duration
     Simulator::Stop(Seconds(simTime));
     Simulator::Run();
+    WritePacketMetricsToCsv();
     Simulator::Destroy();
     return 0;
 }
