@@ -59,7 +59,7 @@ SourceMacTxCallback(std::string context, Ptr<const Packet> p)
     EthernetHeader2 header;
     Ptr<Packet> packetCopy = p->Copy();
     packetCopy->RemoveHeader(header);
-    packetTable[uid].vlanId = header.GetVlanID();
+    packetTable[uid].vlanId = header.GetVid();
 }
 
 /**
@@ -192,7 +192,7 @@ double CreateRandomBackgroundFlow(Ptr<TsnNode> srcNode, Ptr<TsnNetDevice> srcDev
         double averageIntervalSec = period.GetSeconds();
         Ri_bps = (Li * 8.0) / averageIntervalSec;
         attempts++;
-    } while (Ri_bps > maxAllowedBps && attempts < 100000);
+    } while (Ri_bps > maxAllowedBps && attempts < 1000000);
 
     if (Ri_bps > maxAllowedBps)
     {
@@ -475,8 +475,8 @@ int main(int argc, char *argv[])
         sif->SetAttribute("Address", AddressValue(es3_mac));
 
         // Add identification on SW1 and SW2
-        sw1_dev->AddStreamIdentificationFunction(streamHandles[i], sif, {sw1_p3, sw2_p4}, {}, {}, {});
-        sw2_dev->AddStreamIdentificationFunction(streamHandles[i], sif, {sw1_p3, sw2_p4}, {}, {}, {});
+        sw1->AddStreamIdentificationFunction(streamHandles[i], sif, {sw1_p3, sw2_p4}, {}, {}, {});
+        sw2->AddStreamIdentificationFunction(streamHandles[i], sif, {sw1_p3, sw2_p4}, {}, {}, {});
     }
 
     // --- LOGIC FOR ATS FLOW PARAMETERS (S2 FAMILY) ---
@@ -597,7 +597,7 @@ int main(int argc, char *argv[])
     // One instance has the perfect fit
     if (scenario == "S2.1.4" || scenario == "S2.2.4")
     {
-        uint32_t instance_fit = ats_group_sw1->CreateInstance(DataRateValue(DataRate("400Mbps")), UintegerValue(4000));
+        uint32_t instance_fit = ats_group_sw1->CreateAtsInstance(DataRate("400Mbps"), 4000);
         ats_group_sw1->BindStreamToInstance(14, instance_fit);
     }
 
@@ -613,7 +613,7 @@ int main(int argc, char *argv[])
     // One instance has the perfect fit
     if (scenario == "S2.1.4" || scenario == "S2.2.4")
     {
-        uint32_t instance_fit = ats_group_sw2->CreateInstance(DataRateValue(DataRate("400Mbps")), UintegerValue(4000));
+        uint32_t instance_fit = ats_group_sw2->CreateAtsInstance(DataRate("400Mbps"), 4000);
         ats_group_sw2->BindStreamToInstance(14, instance_fit);
     }
 
