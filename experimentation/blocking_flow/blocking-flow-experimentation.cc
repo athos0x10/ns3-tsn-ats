@@ -328,7 +328,7 @@ int main(int argc, char *argv[])
         app3->SetAttribute("Period", TimeValue(Seconds(1.0)));
         app3->SetAttribute("PCP", UintegerValue(0));
         es0->AddApplication(app3);
-        app3->SetStartTime(Seconds(1.00018667));
+        app3->SetStartTime(Seconds(1.00014));
         app3->SetStopTime(Seconds(1.1));
     }
 
