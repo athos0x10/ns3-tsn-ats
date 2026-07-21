@@ -1,9 +1,9 @@
 /**
- * @file WorstCaseS2.cc
+ * @file worst-case-cbs.cc
  * @author Arthur
- * @brief This file contains the worst-case experiment for the S2 family.
+ * @brief This file contains the worst-case experiment for cbs.
  *
- * @date 2026-07-17
+ * @date 2026-07-16
  *
  */
 
@@ -16,24 +16,20 @@
 #include <fstream>
 #include <random>
 #include <map>
-#include <vector>
 
 using namespace ns3;
 
-NS_LOG_COMPONENT_DEFINE("WorstCaseS2");
+NS_LOG_COMPONENT_DEFINE("WorstCaseExperimentation");
 
 // --- Structures and Global Variables for Tracing ---
 
 struct PacketRecord
 {
     uint64_t uid;
-    uint16_t vlanId = 0;            // VLAN ID added to trace individual flows
     double generationTime = -1.0;   // Time when packet is sent by ES3 (MacTx)
-    double eligibilityTime = -1.0;  // Time when packet becomes eligible in ATS
     double transmissionTime = -1.0; // Time when physical transmission starts (PhyTxBegin)
     double receptionTime = -1.0;    // Time when packet is received by ES7 (MacRx)
     double endToEndDelay = -1.0;    // receptionTime - generationTime
-    double atsQueueingDelay = -1.0; // transmissionTime - eligibilityTime
     double interDeparture = -1.0;   // Time between consecutive physical departures
 };
 
@@ -55,11 +51,7 @@ SourceMacTxCallback(std::string context, Ptr<const Packet> p)
     packetTable[uid].uid = uid;
     packetTable[uid].generationTime = Simulator::Now().GetSeconds();
 
-    // Extract VLAN ID from Ethernet Header to trace different flows
-    EthernetHeader2 header;
-    Ptr<Packet> packetCopy = p->Copy();
-    packetCopy->RemoveHeader(header);
-    packetTable[uid].vlanId = header.GetVid();
+    // NS_LOG_INFO(Simulator::Now().As(Time::S) << " \t" << context << " : Critical Pkt #" << uid << " generated/sent!");
 }
 
 /**
@@ -76,28 +68,10 @@ PhyTxBeginCallback(std::string context, Ptr<const Packet> p)
         double now = Simulator::Now().GetSeconds();
         packetTable[uid].transmissionTime = now;
 
-        // Calculate ATS queueing delay: transmissionTime - eligibilityTime
-        if (packetTable[uid].eligibilityTime > 0)
-        {
-            packetTable[uid].atsQueueingDelay = now - packetTable[uid].eligibilityTime;
-        }
-
         // Calculate Inter-departure time
         double interDeparture = (lastDepartureTime > 0) ? (now - lastDepartureTime) : 0.0;
         packetTable[uid].interDeparture = interDeparture;
         lastDepartureTime = now;
-    }
-}
-
-/**
- * @brief Callback triggered when ATS determines a packet's eligibility time.
- */
-void AtsEligibilityCallback(Ptr<const Packet> p, Time eligibilityTime)
-{
-    uint64_t uid = p->GetUid();
-    if (packetTable.find(uid) != packetTable.end())
-    {
-        packetTable[uid].eligibilityTime = eligibilityTime.GetSeconds();
     }
 }
 
@@ -126,6 +100,8 @@ DestinationMacRxCallback(std::string context, Ptr<const Packet> p)
         {
             packetTable[uid].endToEndDelay = now - packetTable[uid].generationTime;
         }
+
+        // NS_LOG_INFO(Simulator::Now().As(Time::S) << " \t" << context << " : Critical Pkt #" << uid << " received at destination!");
     }
 }
 
@@ -136,19 +112,16 @@ void WritePacketMetricsToCsv()
 {
     if (csvPackets.is_open())
     {
-        // CSV Header with Vlan_ID included
-        csvPackets << "Packet_UID,Vlan_ID,Generation_Time,Eligibility_Time,Transmission_Time,Reception_Time,End_To_End_Delay,ATS_Queueing_Delay,Inter_Departure\n";
+        // CSV Header
+        csvPackets << "Packet_UID,Generation_Time,Eligibility_Time,Transmission_Time,Reception_Time,End_To_End_Delay,cbs_Queueing_Delay,Inter_Departure\n";
 
         for (auto const &[uid, info] : packetTable)
         {
             csvPackets << info.uid << ","
-                       << info.vlanId << ","
                        << info.generationTime << ","
-                       << info.eligibilityTime << ","
                        << info.transmissionTime << ","
                        << info.receptionTime << ","
                        << info.endToEndDelay << ","
-                       << info.atsQueueingDelay << ","
                        << info.interDeparture << "\n";
         }
         csvPackets.close();
@@ -162,6 +135,12 @@ void WritePacketMetricsToCsv()
 
 /**
  * @brief Automatically generates a random background flow on a source node.
+ *
+ * @param srcNode The source TSN End Station node (e.g., ES1, ES2, ES4, ES5)
+ * @param srcDevice The network device associated with the source node's egress port
+ * @param destNode The destination TSN End Station node (e.g., ES6, ES7)
+ * @param maxAllowedBps Maximum acceptable throughput to avoid saturating the link
+ * @return double The generated throughput R_i of this flow in bits per second (bps), or 0.0 if unable to fit
  */
 double CreateRandomBackgroundFlow(Ptr<TsnNode> srcNode, Ptr<TsnNetDevice> srcDevice, Ptr<TsnNetDevice> destDevice, double maxAllowedBps)
 {
@@ -192,7 +171,7 @@ double CreateRandomBackgroundFlow(Ptr<TsnNode> srcNode, Ptr<TsnNetDevice> srcDev
         double averageIntervalSec = period.GetSeconds();
         Ri_bps = (Li * 8.0) / averageIntervalSec;
         attempts++;
-    } while (Ri_bps > maxAllowedBps && attempts < 1000000);
+    } while (Ri_bps > maxAllowedBps && attempts < 100000);
 
     if (Ri_bps > maxAllowedBps)
     {
@@ -217,19 +196,19 @@ double CreateRandomBackgroundFlow(Ptr<TsnNode> srcNode, Ptr<TsnNetDevice> srcDev
 
 int main(int argc, char *argv[])
 {
-    std::string scenario = "S2.1.1";
+    std::string scenario = "S1.1.1";
     double targetLoad = 0.10;
     double simTime = 1.0;
 
     CommandLine cmd(__FILE__);
-    cmd.AddValue("scenario", "Scenario to run (S2.1.1, S2.1.2, S2.1.3, S2.1.4, S2.2.1, S2.2.2, S2.2.3, S2.2.4)", scenario);
+    cmd.AddValue("scenario", "Scenario to run (S1.1.1, S1.1.2, S1.1.3, S1.1.4, S1.2.*, S2.*)", scenario);
     cmd.AddValue("load", "Target load of the transit link between 0.0 and 1.0 (e.g., 0.15 for 15%)", targetLoad);
     cmd.AddValue("simTime", "Total simulation time", simTime);
     cmd.Parse(argc, argv);
 
-    LogComponentEnable("WorstCaseS2", LOG_LEVEL_INFO);
+    LogComponentEnable("WorstCaseExperimentation", LOG_LEVEL_INFO);
 
-    std::string packetCsvName = "packet_metrics_" + scenario + "_load_" + std::to_string(targetLoad) + ".csv";
+    std::string packetCsvName = "packet_metrics_" + scenario + "_load_" + std::to_string(targetLoad) + "_cbs.csv";
     csvPackets.open(packetCsvName);
 
     // Creation of the nodes
@@ -429,6 +408,16 @@ int main(int argc, char *argv[])
     es6_p0->SetAddress(es6_mac);
     es7_p0->SetAddress(es7_mac);
 
+    DataRate nominalcbsRate("400Mbps");
+    DataRate overProvisionedcbsRate("440Mbps");
+
+    DataRate selectedSchedulerRate = nominalcbsRate;
+
+    if (scenario == "S1.1.2" || scenario == "S1.2.2")
+    {
+        selectedSchedulerRate = overProvisionedcbsRate;
+    }
+
     // Creation of the queues
     for (uint8_t i = 0; i < 8; i++)
     {
@@ -442,12 +431,37 @@ int main(int argc, char *argv[])
         sw1_p0->SetQueue(CreateObject<DropTailQueue<Packet>>());
         sw1_p1->SetQueue(CreateObject<DropTailQueue<Packet>>());
         sw1_p2->SetQueue(CreateObject<DropTailQueue<Packet>>());
-        sw1_p3->SetQueue(CreateObject<DropTailQueue<Packet>>());
+
+        if (i != 5)
+        {
+            sw1_p3->SetQueue(CreateObject<DropTailQueue<Packet>>());
+        }
+        else
+        {
+            Ptr<Cbs> cbs = CreateObject<Cbs>();
+            cbs->SetTsnNetDevice(sw1_p3);
+            cbs->SetAttribute("IdleSlope", DataRateValue(selectedSchedulerRate));
+            cbs->SetAttribute("portTransmitRate", DataRateValue(DataRate("100Mb/s")));
+            sw1_p3->SetQueue(CreateObject<DropTailQueue<Packet>>(), cbs);
+        }
+
         sw2_p0->SetQueue(CreateObject<DropTailQueue<Packet>>());
         sw2_p1->SetQueue(CreateObject<DropTailQueue<Packet>>());
         sw2_p2->SetQueue(CreateObject<DropTailQueue<Packet>>());
         sw2_p3->SetQueue(CreateObject<DropTailQueue<Packet>>());
-        sw2_p4->SetQueue(CreateObject<DropTailQueue<Packet>>());
+
+        if (i != 5)
+        {
+            sw2_p4->SetQueue(CreateObject<DropTailQueue<Packet>>());
+        }
+        else
+        {
+            Ptr<Cbs> cbs = CreateObject<Cbs>();
+            cbs->SetTsnNetDevice(sw2_p4);
+            cbs->SetAttribute("IdleSlope", DataRateValue(selectedSchedulerRate));
+            cbs->SetAttribute("portTransmitRate", DataRateValue(DataRate("100Mb/s")));
+            sw2_p4->SetQueue(CreateObject<DropTailQueue<Packet>>(), cbs);
+        }
     }
 
     // Forwarding table configuration
@@ -455,82 +469,20 @@ int main(int argc, char *argv[])
     sw1_dev->AddForwardingTableEntry(es7_mac, 100, {sw1_p3});
     sw2_dev->AddForwardingTableEntry(es6_mac, 100, {sw2_p3});
     sw2_dev->AddForwardingTableEntry(es7_mac, 100, {sw2_p4});
-    sw1_dev->AddForwardingTableEntry(es7_mac, 101, {sw1_p3});
-    sw2_dev->AddForwardingTableEntry(es7_mac, 101, {sw2_p4});
-    sw1_dev->AddForwardingTableEntry(es7_mac, 102, {sw1_p3});
-    sw2_dev->AddForwardingTableEntry(es7_mac, 102, {sw2_p4});
-    sw1_dev->AddForwardingTableEntry(es7_mac, 103, {sw1_p3});
-    sw2_dev->AddForwardingTableEntry(es7_mac, 103, {sw2_p4});
-    sw1_dev->AddForwardingTableEntry(es7_mac, 104, {sw1_p3});
-    sw2_dev->AddForwardingTableEntry(es7_mac, 104, {sw2_p4});
 
-    // Stream identification Configuration (VLAN 100 to 104)
-    std::vector<uint16_t> vlanIds = {100, 101, 102, 103, 104};
-    std::vector<uint16_t> streamHandles = {10, 11, 12, 13, 14};
-
-    for (size_t i = 0; i < vlanIds.size(); ++i)
-    {
-        Ptr<NullStreamIdentificationFunction> sif = CreateObject<NullStreamIdentificationFunction>();
-        sif->SetAttribute("VlanID", UintegerValue(vlanIds[i]));
-        sif->SetAttribute("Address", AddressValue(es3_mac));
-
-        // Add identification on SW1 and SW2
-        sw1->AddStreamIdentificationFunction(streamHandles[i], sif, {sw1_p3, sw2_p4}, {}, {}, {});
-        sw2->AddStreamIdentificationFunction(streamHandles[i], sif, {sw1_p3, sw2_p4}, {}, {}, {});
-    }
-
-    // --- LOGIC FOR ATS FLOW PARAMETERS (S2 FAMILY) ---
-    std::map<uint16_t, Time> periods;
-
-    // Determine periods based on active scenario
-    if (scenario.rfind("S2.1.1", 0) == 0 || scenario.rfind("S2.2.1", 0) == 0)
-    {
-        // S2.1.1 & S2.2.1 : Homogeneous periods (10µs everywhere)
-        periods[100] = MicroSeconds(10);
-        periods[101] = MicroSeconds(10);
-        periods[102] = MicroSeconds(10);
-        periods[103] = MicroSeconds(10);
-        periods[104] = MicroSeconds(10);
-    }
-    else
-    {
-        // S2.1.2, S2.1.3, S2.1.4 & S2.2.2, S2.2.3, S2.2.4 : Heterogeneous periods
-        periods[100] = MicroSeconds(1);
-        periods[101] = MicroSeconds(1);
-        periods[102] = MicroSeconds(5);
-        periods[103] = MicroSeconds(10);
-        periods[104] = MicroSeconds(10);
-    }
-
-    // --- ATS APPLICATIONS GENERATION FOR THE 5 CRITICAL FLOWS ---
-    for (uint16_t vlan : vlanIds)
-    {
-        Ptr<EthernetGenerator> atsApp = CreateObject<EthernetGenerator>();
-        atsApp->Setup(es3_p0);
-        atsApp->SetAttribute("Address", AddressValue(es7_mac));
-        atsApp->SetAttribute("PayloadSize", UintegerValue(478)); // 478B Payload + 22B L2 Header = 500B Frame
-        atsApp->SetAttribute("PCP", UintegerValue(5));
-        atsApp->SetAttribute("VlanID", UintegerValue(vlan));
-        atsApp->SetAttribute("Period", TimeValue(periods[vlan]));
-        atsApp->SetAttribute("BurstSize", UintegerValue(1));
-        atsApp->SetStartTime(Seconds(0.0));
-
-        es3->AddApplication(atsApp);
-    }
-    NS_LOG_INFO("Successfully generated 5 ATS critical flows (VLAN 100..104) for scenario " << scenario);
-
-    // --- BACKGROUND TRAFFIC CONFIGURATION (E1, E2) ---
+    // Generate random background flows for ES1, ES2, ES4, and ES5
     double linkCapacityBps = 100000000.0; // 100 Mbps
     double targetLoadBps = targetLoad * linkCapacityBps;
 
-    // Load of the link SW1 -> SW2 (Always active)
+    // --- load of the link SW1 -> SW2 ---
     double transitLinkLoadBps = 0.0;
     while (transitLinkLoadBps < targetLoadBps)
     {
+        // remaining budget to not exceed targetLoadBps
         double budget = targetLoadBps - transitLinkLoadBps;
         double flow1 = CreateRandomBackgroundFlow(es1, es1_p0, es6_p0, budget);
         if (flow1 == 0.0)
-            break;
+            break; // Cannot add more traffic without exceeding budget
         transitLinkLoadBps += flow1;
 
         if (transitLinkLoadBps >= targetLoadBps)
@@ -539,13 +491,14 @@ int main(int argc, char *argv[])
         budget = targetLoadBps - transitLinkLoadBps;
         double flow2 = CreateRandomBackgroundFlow(es2, es2_p0, es6_p0, budget);
         if (flow2 == 0.0)
-            break;
+            break; // Cannot add more traffic without exceeding budget
         transitLinkLoadBps += flow2;
     }
     NS_LOG_INFO("Transit Link (SW1->SW2) Background Load: " << (transitLinkLoadBps / 1e6) << " Mbps");
 
-    // --- BACKGROUND TRAFFIC CONFIGURATION FOR S2.2 FAMILY (E4, E5) ---
-    if (scenario.find("S2.2.") != std::string::npos)
+    // --- load of the link SW2 -> ES7 ---
+    bool includeSw2Background = (scenario.rfind("S1.2.", 0) == 0);
+    if (includeSw2Background)
     {
         double rxLinkLoadBps = 0.0;
         while (rxLinkLoadBps < targetLoadBps)
@@ -565,80 +518,46 @@ int main(int argc, char *argv[])
                 break;
             rxLinkLoadBps += flow2;
         }
-        NS_LOG_INFO("Rx Link (SW2->ES7) Background Load (S2.2 enabled): " << (rxLinkLoadBps / 1e6) << " Mbps");
-    }
-    else
-    {
-        NS_LOG_INFO("No background traffic from E4/E5 for S2.1 family (No queuing delay in SW2).");
+        NS_LOG_INFO("Rx Link (SW2->ES7) Background Load: " << (rxLinkLoadBps / 1e6) << " Mbps");
     }
 
-    // --- ATS SHAPER CONFIGURATION FOR SWITCH SW1 & SW2 ---
+    // cbs flow generation for the critical flow from ES1 to ES7
+    Ptr<EthernetGenerator> cbsApp = CreateObject<EthernetGenerator>();
+    cbsApp->Setup(es3_p0);
+    cbsApp->SetAttribute("Address", AddressValue(es7_mac));
+    cbsApp->SetAttribute("PayloadSize", UintegerValue(478)); // 478B + 22B header = 500 Bytes Frame
+    cbsApp->SetAttribute("PCP", UintegerValue(5));
+    cbsApp->SetAttribute("VlanID", UintegerValue(100));
 
-    auto configureAtsGroup = [&](Ptr<AtsSchedulerGroup> ats_group)
+    // Configure the cbs Flow behavior according to the specific scenario
+    if (scenario == "S1.1.1" || scenario == "S1.1.2" || scenario == "S1.2.1" || scenario == "S1.2.2")
     {
-        bool isHomogeneous = (scenario == "S2.1.1" || scenario == "S2.2.1");
+        // Purely periodic: period = 10µs, jitter = 0
+        NS_LOG_INFO("cbs Flow configured as purely periodic with period = 10µs and jitter = 0");
+        cbsApp->SetAttribute("Period", TimeValue(MicroSeconds(10)));
+        cbsApp->SetAttribute("BurstSize", UintegerValue(1));
+    }
+    else if (scenario == "S1.1.3" || scenario == "S1.2.3")
+    {
+        // Sporadic: T_IPG = 10µs + U(0, 1µs) -> Mean = 10.5µs, Jitter = 0.5µs
+        cbsApp->SetAttribute("Period", TimeValue(NanoSeconds(10500))); // 10.5 us
+        cbsApp->SetAttribute("Jitter", TimeValue(NanoSeconds(500)));   // 0.5 us
+        cbsApp->SetAttribute("BurstSize", UintegerValue(1));
+    }
+    else if (scenario == "S1.1.4" || scenario == "S1.2.4")
+    {
+        // Purely periodic (period = 10µs) but 1 out of 10 packets is skipped.
+        // Since EthernetGenerator does not natively support "skip 1/10",
+        // we can approximate this by generating bursts of 9 packets with 10us spacing,
+        // followed by a silent period of 20us (making 10 packet-cycles of 10us with 1 omitted).
+        cbsApp->SetAttribute("Period", TimeValue(MicroSeconds(100))); // Complete cycle period
+        cbsApp->SetAttribute("BurstSize", UintegerValue(9));
+        cbsApp->SetAttribute("InterFrame", TimeValue(MicroSeconds(10)));
+        cbsApp->SetAttribute("Jitter", TimeValue(MicroSeconds(0)));
+    }
 
-        // Base rate based on frame size (500B) and period:
-        // 1us -> 4Gbps | 5us -> 800Mbps | 10us -> 400Mbps
-        DataRate rate_stream10 = isHomogeneous ? DataRate("400Mbps") : DataRate("4Gbps");
-        DataRate rate_stream11 = isHomogeneous ? DataRate("400Mbps") : DataRate("4Gbps");
-        DataRate rate_stream12 = isHomogeneous ? DataRate("400Mbps") : DataRate("800Mbps");
-        DataRate rate_stream13 = DataRate("400Mbps");
-        DataRate rate_stream14 = DataRate("400Mbps");
-
-        // Over-provisioning factor (+10%) for scenarios .3 and .4
-        double factor10to13 = (scenario == "S2.1.3" || scenario == "S2.2.3" || scenario == "S2.1.4" || scenario == "S2.2.4") ? 1.1 : 1.0;
-
-        // Stream 14 stays at perfect fit in S1.1.4 (factor = 1.0)
-        double factor14 = (scenario == "S2.1.3" || scenario == "S2.2.3") ? 1.1 : 1.0;
-
-        // Apply rates
-        rate_stream10 = DataRate(rate_stream10.GetBitRate() * factor10to13);
-        rate_stream11 = DataRate(rate_stream11.GetBitRate() * factor10to13);
-        rate_stream12 = DataRate(rate_stream12.GetBitRate() * factor10to13);
-        rate_stream13 = DataRate(rate_stream13.GetBitRate() * factor10to13);
-        rate_stream14 = DataRate(rate_stream14.GetBitRate() * factor14);
-
-        // Group default configuration
-        ats_group->SetAttribute("DefaultCir", DataRateValue(rate_stream10));
-        ats_group->SetAttribute("DefaultCbs", UintegerValue(4000));
-
-        // Create individual scheduler instances for stream handles 10-14
-        uint32_t inst10 = ats_group->CreateAtsInstance(rate_stream10, 4000);
-        ats_group->BindStreamToInstance(10, inst10);
-
-        uint32_t inst11 = ats_group->CreateAtsInstance(rate_stream11, 4000);
-        ats_group->BindStreamToInstance(11, inst11);
-
-        uint32_t inst12 = ats_group->CreateAtsInstance(rate_stream12, 4000);
-        ats_group->BindStreamToInstance(12, inst12);
-
-        uint32_t inst13 = ats_group->CreateAtsInstance(rate_stream13, 4000);
-        ats_group->BindStreamToInstance(13, inst13);
-
-        uint32_t inst14 = ats_group->CreateAtsInstance(rate_stream14, 4000);
-        ats_group->BindStreamToInstance(14, inst14);
-    };
-
-    // SW1 ATS setup
-    sw1_p3->SetAttribute("isAtsEnabled", BooleanValue(true));
-    Ptr<Ats> ats_sw1 = sw1_p3->GetAts();
-    ats_sw1->SetClock(clock0);
-    ats_sw1->SetPriorityActivation(5, true);
-    Ptr<AtsSchedulerGroup> ats_group_sw1 = ats_sw1->GetGroupForBridge(sw1_p2, sw1_p3, 5);
-    configureAtsGroup(ats_group_sw1);
-
-    // SW2 ATS setup
-    sw2_p4->SetAttribute("isAtsEnabled", BooleanValue(true));
-    Ptr<Ats> ats_sw2 = sw2_p4->GetAts();
-    ats_sw2->SetClock(clock1);
-    ats_sw2->SetPriorityActivation(5, true);
-    Ptr<AtsSchedulerGroup> ats_group_sw2 = ats_sw2->GetGroupForBridge(sw2_p2, sw2_p4, 5);
-    configureAtsGroup(ats_group_sw2);
-
-    // Connect ATS Eligibility tracing
-    ats_sw1->TraceConnectWithoutContext("EligibilityTime", MakeCallback(&AtsEligibilityCallback));
-    ats_sw2->TraceConnectWithoutContext("EligibilityTime", MakeCallback(&AtsEligibilityCallback));
+    cbsApp->SetStartTime(Seconds(0.0));
+    es3->AddApplication(cbsApp);
 
     // --- Connect Physical & MAC Tracing for End-to-End Metrics ---
 

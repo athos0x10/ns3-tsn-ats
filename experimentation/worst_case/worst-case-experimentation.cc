@@ -466,7 +466,6 @@ int main(int argc, char *argv[])
     if (scenario == "S1.1.2" || scenario == "S1.2.2")
     {
         selectedSchedulerRate = overProvisionedAtsRate;
-        selectedSchedulerCbs = 4400; // CBS value remains the same, but the rate is over-provisioned
     }
 
     sw1_p3->SetAttribute("isAtsEnabled", BooleanValue(true));
