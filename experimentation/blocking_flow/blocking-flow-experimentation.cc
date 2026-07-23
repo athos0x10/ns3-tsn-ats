@@ -183,8 +183,8 @@ int main(int argc, char *argv[])
     // Data Rate configuration
     es0_p0->SetAttribute("DataRate", DataRateValue(DataRate("120Mbps")));
     sw_p0->SetAttribute("DataRate", DataRateValue(DataRate("120Mbps")));
-    es1_p0->SetAttribute("DataRate", DataRateValue(DataRate("120Mbps")));
-    sw_p1->SetAttribute("DataRate", DataRateValue(DataRate("120Mbps")));
+    es1_p0->SetAttribute("DataRate", DataRateValue(DataRate("300Mbps")));
+    sw_p1->SetAttribute("DataRate", DataRateValue(DataRate("300Mbps")));
     es2_p0->SetAttribute("DataRate", DataRateValue(DataRate("120Mbps")));
     sw_p2->SetAttribute("DataRate", DataRateValue(DataRate("120Mbps")));
 
@@ -243,11 +243,11 @@ int main(int argc, char *argv[])
     {
         sw_p2->SetAttribute("isAtsEnabled", BooleanValue(true));
         Ptr<Ats> ats = sw_p2->GetAts();
-        ats->SetPriorityActivation(0, true);
+        ats->SetPriorityActivation(1, true);
         ats->SetClock(clock0);
         ats->SetAttribute("MaxResidenceTime", TimeValue(Seconds(1)));
         // We assume that ES0 will be the flow blocked by the other.
-        Ptr<AtsSchedulerGroup> ats_group_pcp0 = ats->GetGroupForBridge(sw_p0, sw_p2, 0);
+        Ptr<AtsSchedulerGroup> ats_group_pcp0 = ats->GetGroupForBridge(sw_p0, sw_p2, 1);
         ats_group_pcp0->SetAttribute("DefaultCir", DataRateValue(DataRate("30Mbps")));
         ats_group_pcp0->SetAttribute("DefaultCbs", UintegerValue(3200));
         // Tracing connection
@@ -281,10 +281,10 @@ int main(int argc, char *argv[])
     app1->Setup(es1_p0);
     app1->SetAttribute("Address", AddressValue(es2_mac));
     app1->SetAttribute("VlanID", UintegerValue(2));
-    app1->SetAttribute("PayloadSize", UintegerValue(978));
+    app1->SetAttribute("PayloadSize", UintegerValue(2978));
     app1->SetAttribute("BurstSize", UintegerValue(1));
     app1->SetAttribute("Period", TimeValue(Seconds(1.0)));
-    app1->SetAttribute("PCP", UintegerValue(7));
+    app1->SetAttribute("PCP", UintegerValue(0));
     es1->AddApplication(app1);
     app1->SetStartTime(Seconds(1.0));
     app1->SetStopTime(Seconds(1.1));
@@ -299,9 +299,9 @@ int main(int argc, char *argv[])
         app2->SetAttribute("PayloadSize", UintegerValue(378));
         app2->SetAttribute("BurstSize", UintegerValue(4));
         app2->SetAttribute("Period", TimeValue(Seconds(1.0)));
-        app2->SetAttribute("PCP", UintegerValue(0));
+        app2->SetAttribute("PCP", UintegerValue(1));
         es0->AddApplication(app2);
-        app2->SetStartTime(Seconds(1.00005));
+        app2->SetStartTime(Seconds(1.00008));
         app2->SetStopTime(Seconds(1.1));
     }
     else
