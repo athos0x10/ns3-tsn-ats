@@ -212,7 +212,7 @@ int main(int argc, char *argv[])
         sw_p1->SetAttribute("isAtsEnabled", BooleanValue(true));
         Ptr<Ats> ats = sw_p1->GetAts();
         ats->SetClock(clock0);
-        ats->SetPriorityActivation(0, true);
+        ats->SetPriorityActivation(1, true);
         ats->SetAttribute("MaxResidenceTime", TimeValue(Seconds(1)));
 
         Ptr<AtsSchedulerGroup> ats_group = ats->GetGroupForBridge(sw_p0, sw_p1, 1);
@@ -248,7 +248,7 @@ int main(int argc, char *argv[])
     app->SetAttribute("VlanID", UintegerValue(100));
     app->SetAttribute("PCP", UintegerValue(1));
     es0->AddApplication(app);
-    app->SetStartTime(Seconds(0.0));
+    app->SetStartTime(Seconds(0.999890));
     app->SetStopTime(Seconds(3.0));
 
     // Execute the simulation
