@@ -314,9 +314,9 @@ int main(int argc, char *argv[])
         app2->SetAttribute("PayloadSize", UintegerValue(378));
         app2->SetAttribute("BurstSize", UintegerValue(1));
         app2->SetAttribute("Period", TimeValue(Seconds(1.0)));
-        app2->SetAttribute("PCP", UintegerValue(0));
+        app2->SetAttribute("PCP", UintegerValue(1));
         es0->AddApplication(app2);
-        app2->SetStartTime(Seconds(1.00005));
+        app2->SetStartTime(Seconds(1.00011));
         app2->SetStopTime(Seconds(1.1));
 
         Ptr<EthernetGenerator> app3 = CreateObject<EthernetGenerator>();
@@ -326,9 +326,9 @@ int main(int argc, char *argv[])
         app3->SetAttribute("PayloadSize", UintegerValue(378));
         app3->SetAttribute("BurstSize", UintegerValue(3));
         app3->SetAttribute("Period", TimeValue(Seconds(1.0)));
-        app3->SetAttribute("PCP", UintegerValue(0));
+        app3->SetAttribute("PCP", UintegerValue(1));
         es0->AddApplication(app3);
-        app3->SetStartTime(Seconds(1.00014));
+        app3->SetStartTime(Seconds(1.00028));
         app3->SetStopTime(Seconds(1.1));
     }
 
