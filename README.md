@@ -17,6 +17,7 @@ This project was part of my internship in the **Electronic Systems group at Eind
 * */scratch*: Simulation scenarios.
 * */test*: Tests source code.
 * */docs*: Technical notes, references to the 802.1Qcr standard.
+* */generator*: Small generator to generate complete ns-3 simulation.
 * */examples*: Example files.
 * */debug*: Simulation scenarios for debug.
 
@@ -28,13 +29,4 @@ This project was part of my internship in the **Electronic Systems group at Eind
 
 ## Deployment
 
-Since this project is not integrated in the eden-sim project (yet) you must copy all the files you need in the eden-sim repository. For this you can use the *deploy.sh* script in order to copy all the files you'll need and also configure and build ns3. Be careful, it will work only if you have the same folder architecture as follow:
-
-```text
-/
-|-ns-allinone-3.40/
-|-eden-sim/
-|-ns3-tsn-ats/
-```
-
-Please make sure to add all the files in the CMakeLists.txt for TSN and traffic-generator.
+Since the project is now deployed on the *eden-sim* project, please refer to its tutorial.
