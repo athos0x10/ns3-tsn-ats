@@ -8,6 +8,9 @@ We discuss how the ATS is implemented differently depending on the node's role: 
 
 - [Software architecture of the Scheduler](#software-architecture-of-the-scheduler)
   - [Table of contents](#table-of-contents)
+  - [ATS Scheduling \& Queue Dynamics](#ats-scheduling--queue-dynamics)
+    - [Core Queue Mechanics](#core-queue-mechanics)
+    - [Frame Queueing \& Dequeueing Lifecycle Diagram](#frame-queueing--dequeueing-lifecycle-diagram)
   - [ATS for Bridges](#ats-for-bridges)
     - [Group and Instance Identification](#group-and-instance-identification)
     - [Frame Processing \& Lifecycle Diagram for bridges](#frame-processing--lifecycle-diagram-for-bridges)
@@ -15,9 +18,46 @@ We discuss how the ATS is implemented differently depending on the node's role: 
   - [ATS for End-Stations](#ats-for-end-stations)
     - [Group and Instance Identification](#group-and-instance-identification-1)
     - [Frame Processing \& Lifecycle Diagram for End-Stations](#frame-processing--lifecycle-diagram-for-end-stations)
-  - [Unified End-Station API Functions](#unified-end-station-api-functions)
+    - [Unified End-Station API Functions](#unified-end-station-api-functions)
 
 
+## ATS Scheduling & Queue Dynamics
+
+Once the ATS subsystem calculates the **Eligibility Time** ($T_{\text{elig}}$) for a frame based on its leaky bucket state, the frame enters the ATS Calendar Queue.
+
+### Core Queue Mechanics
+
+1. **Priority Ordering**: The ATS Queue is strictly ordered by eligibility time: the frame with $\min(T_{\text{elig}})$ is always placed at the **head of the queue**.
+2. **Event-Driven Execution**:
+* A single discrete ns-3 event (`Transmission Event`) is scheduled for the absolute timestamp of the head frame: $T_{\text{head}} = \min(T_{\text{elig}})$.
+* **Immediate Scheduling at `Simulator::Now()`**: If $T_{\text{elig}} \le \text{Simulator::Now()}$, the event is scheduled **immediately at `Simulator::Now()`** (the current simulation time) so the packet can be processed without delay.
+* When simulation time reaches $T_{\text{head}}$, the top frame is popped from the ATS Queue and injected directly into its designated **Priority Egress Output Queue (DropTail/FIFO)**.
+* **Empty Queue Handling**: After releasing a frame, the ATS subsystem checks the calendar queue. If the queue is empty, no further transmission event is scheduled and the ATS engine enters an idle state until a new frame arrives.
+* If the queue is not empty, the subsystem inspects the next frame at the head and schedules a new timer for its $T_{\text{elig}}$ (or at `Simulator::Now()` if $T_{\text{elig}} \le \text{Simulator::Now()}$).
+
+### Frame Queueing & Dequeueing Lifecycle Diagram
+
+```mermaid
+graph TD
+    A[Frame Arrives] --> B[Compute Eligibility Time: T_elig]
+    
+    B --> C["Insert Frame into ATS Queue<br>(Sorted by min Eligibility Time)"]
+    
+    C --> D{"Time reaches T_elig?"}
+    
+    D -->|Yes / Immediate| E[Pop Frame from ATS Queue]
+    
+    E --> F[Send Frame to Egress FIFO Output Queue]
+
+    %% Styles
+    classDef action fill:#e1f5fe,stroke:#0288d1,stroke-width:1px;
+    classDef decision fill:#fff9c4,stroke:#fbc02d,stroke-width:1px;
+    classDef queue fill:#e8f5e9,stroke:#388e3c,stroke-width:1px;
+
+    class B,E action;
+    class D decision;
+    class C,F queue;
+```
 
 ## ATS for Bridges
 
@@ -166,7 +206,7 @@ graph TD
 
 ```
 
-## Unified End-Station API Functions
+### Unified End-Station API Functions
 
 To safely interact with this architecture without manipulating raw map indices or magic hash tokens, use the following core methods:
 
