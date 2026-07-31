@@ -30,6 +30,9 @@
  * - **S1.2.3**: Same ATS flow configuration as S1.1.3, with added background traffic from E4 and E5.
  * - **S1.2.4**: Same ATS flow configuration as S1.1.4, with added background traffic from E4 and E5.
  *
+ *
+ * @note To run it: ./ns3 run "scratch/worst-case-experimentation-s1 --scenario=<scenario> --load=<load (e.g 0.05)> --simTime=<simTime>"
+ *
  * @date 2026-07-24
  */
 

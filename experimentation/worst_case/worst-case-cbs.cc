@@ -391,7 +391,7 @@ int main(int argc, char *argv[])
         sw1_p1->SetQueue(CreateObject<DropTailQueue<Packet>>());
         sw1_p2->SetQueue(CreateObject<DropTailQueue<Packet>>());
 
-        if (i != 5)
+        if (i != 4)
         {
             sw1_p3->SetQueue(CreateObject<DropTailQueue<Packet>>());
         }
@@ -409,7 +409,7 @@ int main(int argc, char *argv[])
         sw2_p2->SetQueue(CreateObject<DropTailQueue<Packet>>());
         sw2_p3->SetQueue(CreateObject<DropTailQueue<Packet>>());
 
-        if (i != 5)
+        if (i != 4)
         {
             sw2_p4->SetQueue(CreateObject<DropTailQueue<Packet>>());
         }
